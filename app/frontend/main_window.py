@@ -77,6 +77,20 @@ class MainWindow(QMainWindow):
         # Setup error handler
         self.error_handler = ErrorHandler(self)
         self.error_handler.errorOccurred.connect(self.on_error_occurred)
+
+        # Initialize state manager
+        self.state_manager = StateManager()
+        
+        # Restore window geometry
+        self._restore_window_geometry()
+        
+        # Check for crash recovery
+        QTimer.singleShot(500, self._check_crash_recovery)
+        
+        # Auto-save timer (every 5 minutes)
+        self.auto_save_timer = QTimer(self)
+        self.auto_save_timer.timeout.connect(self._auto_save_state)
+        self.auto_save_timer.start(5 * 60 * 1000)  # 5 minutes
         
 
     def setup_fonts(self):
@@ -273,17 +287,170 @@ class MainWindow(QMainWindow):
         # Accept the close event
         event.accept()
 
-@Slot(str, str, str)
-def on_error_occurred(self, error_type, title, message):
-    """Handle application errors.
+    @Slot(str, str, str)
+    def on_error_occurred(self, error_type, title, message):
+        """Handle application errors.
+        
+        Args:
+            error_type: Type of error
+            title: Dialog title
+            message: Error message
+        """
+        self.error_handler.show_error_dialog(error_type, title, message, self)
+        
+        # Log the error
+        logger.error(f"Application error ({error_type}): {message}")
     
-    Args:
-        error_type: Type of error
-        title: Dialog title
-        message: Error message
-    """
-    self.error_handler.show_error_dialog(error_type, title, message, self)
+    def _restore_window_geometry(self):
+        """Restore window size and position from saved state."""
+        width, height, maximized = self.state_manager.get_window_geometry()
+        
+        # Set window size
+        self.resize(width, height)
+        
+        # Center window on screen
+        screen = self.screen()
+        screen_geometry = screen.availableGeometry()
+        self.move(
+            (screen_geometry.width() - width) // 2,
+            (screen_geometry.height() - height) // 2
+        )
+        
+        # Maximize if needed
+        if maximized:
+            self.showMaximized()
     
-    # Log the error
-    logger.error(f"Application error ({error_type}): {message}")
+    def resizeEvent(self, event):
+        """Handle window resize event.
+        
+        Args:
+            event: Resize event
+        """
+        super().resizeEvent(event)
+        
+        # Don't save if minimized or not visible
+        if self.isMinimized() or not self.isVisible():
+            return
+            
+        # Save window geometry (only if not maximized)
+        if not self.isMaximized():
+            self.state_manager.set_window_geometry(
+                self.width(),
+                self.height(),
+                False
+            )
     
+    def changeEvent(self, event):
+        """Handle window state change event.
+        
+        Args:
+            event: Change event
+        """
+        super().changeEvent(event)
+        
+        # Save maximized state
+        if event.type() == QEvent.WindowStateChange:
+            self.state_manager.set_window_geometry(
+                self.width(),
+                self.height(),
+                self.isMaximized()
+            )
+    
+    def closeEvent(self, event):
+        """Handle window close event.
+        
+        Args:
+            event: Close event
+        """
+        # Save state before closing
+        self._save_state()
+        
+        # Accept the close event
+        event.accept()
+    
+    def _auto_save_state(self):
+        """Automatically save application state."""
+        self._save_state()
+    
+    def _save_state(self):
+        """Save application state."""
+        # Save current mode
+        current_mode = "simple" if self.stacked_widget.currentIndex() == 0 else "advanced"
+        self.state_manager.set_last_mode(current_mode)
+        
+        # Save current folder if available
+        if hasattr(self, "current_folder") and self.current_folder:
+            self.state_manager.add_recent_folder(self.current_folder)
+        
+        # Save state to disk
+        self.state_manager.save_state()
+        logger.debug("Application state saved")
+    
+    def _check_crash_recovery(self):
+        """Check if there's a crash recovery state and offer to restore."""
+        if not self.state_manager.has_crash_recovery():
+            return
+        
+        # Get crash recovery info
+        recovery_info = self.state_manager.get_crash_recovery_info()
+        folder = recovery_info.get("last_folder")
+        operation = recovery_info.get("last_operation")
+        timestamp_str = recovery_info.get("timestamp", "")
+        
+        # Format timestamp if available
+        timestamp_display = ""
+        if timestamp_str:
+            try:
+                timestamp = datetime.fromisoformat(timestamp_str)
+                timestamp_display = timestamp.strftime("%Y-%m-%d %H:%M:%S")
+            except:
+                timestamp_display = timestamp_str
+        
+        # Show recovery dialog
+        if folder and os.path.isdir(folder):
+            message = f"AddaxAI was closed unexpectedly during a {operation} operation.\n\nWould you like to restore your work for folder:\n{folder}"
+            if timestamp_display:
+                message += f"\n\nTimestamp: {timestamp_display}"
+                
+            result = QMessageBox.question(
+                self,
+                "Recover Previous Session",
+                message,
+                QMessageBox.Yes | QMessageBox.No
+            )
+            
+            if result == QMessageBox.Yes:
+                # Attempt to restore
+                self._restore_from_crash(folder, operation)
+            else:
+                # Clear recovery state
+                self.state_manager.clear_operation_in_progress()
+    
+    def _restore_from_crash(self, folder, operation):
+        """Restore application state from crash recovery.
+        
+        Args:
+            folder: Folder path
+            operation: Operation name
+        """
+        # Clear recovery state
+        self.state_manager.clear_operation_in_progress()
+        
+        # Switch to appropriate mode
+        if operation in ["detection", "simple_detection"]:
+            self.switch_to_simple_mode()
+        else:
+            self.switch_to_advanced_mode()
+        
+        # Open the folder
+        if operation == "simple_detection":
+            self.simple_mode.set_folder(folder)
+        elif operation in ["detection", "postprocessing", "verification"]:
+            self.advanced_mode.set_folder(folder)
+        
+        # Notify user
+        QMessageBox.information(
+            self,
+            "Recovery Complete",
+            f"Session restored for folder:\n{folder}\n\nYou can continue your work."
+        )
