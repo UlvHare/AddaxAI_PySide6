@@ -350,8 +350,11 @@ class TaskManager(QObject):
     taskCompleted = Signal(str, bool, object)  # task, success, results
     taskError = Signal(str, str)  # task, error_message
     
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, error_handler=None):
         super().__init__(parent)
+        
+        # Save error handler reference
+        self.error_handler = error_handler
         
         # Create worker thread
         self.worker = TaskWorker()
@@ -361,6 +364,7 @@ class TaskManager(QObject):
         self.worker.taskProgress.connect(self.on_task_progress)
         self.worker.taskCompleted.connect(self.on_task_completed)
         self.worker.taskError.connect(self.on_task_error)
+
     
     def run_task(self, task, params=None):
         """Run a task in the background.
@@ -396,4 +400,10 @@ class TaskManager(QObject):
     @Slot(str, str)
     def on_task_error(self, task, error_message):
         """Handle task error event."""
+        # Emit signal
         self.taskError.emit(task, error_message)
+        
+        # Use error handler if available
+        if self.error_handler:
+            self.error_handler.handle_task_error(task, error_message, self.parent())
+            
