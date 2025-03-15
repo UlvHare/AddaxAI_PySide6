@@ -106,44 +106,48 @@ class AboutDialog(QDialog):
         # License tab - Read from LICENSE file
         license_tab = QWidget()
         license_layout = QVBoxLayout(license_tab)
-
+        
         license_text = QTextEdit()
         license_text.setReadOnly(True)
         license_text.setFont(QFont("monospace"))
-
+        
         # Try to find LICENSE file in the project root
         license_content = "License file not found."
         try:
-            # Get project root directory (assuming structure: .../AddaxAI/)
-            root_dir = Path(AddaxAI_files).parent
-            license_path = root_dir / "LICENSE"
-
-            # If not found, try parent directory
-            if not license_path.exists():
-                root_dir = root_dir.parent
-                license_path = root_dir / "LICENSE"
-
-            # If still not found, try common variations
-            if not license_path.exists():
-                for name in ["LICENSE.txt", "LICENSE.md", "license", "License.txt"]:
-                    alt_path = root_dir / name
-                    if alt_path.exists():
-                        license_path = alt_path
-                        break
-
+            # Get project root directory (assuming structure: .../app/frontend/about_dialog.py)
+            current_dir = Path(__file__).resolve().parent
+            app_dir = current_dir.parent
+            project_dir = app_dir.parent
+            
+            # Search for LICENSE file
+            license_paths = [
+                project_dir / "LICENSE",
+                project_dir / "LICENSE.txt",
+                project_dir / "LICENSE.md",
+                project_dir.parent / "LICENSE",
+                project_dir.parent / "LICENSE.txt"
+            ]
+            
+            # Try each possible location
+            license_file = None
+            for path in license_paths:
+                if path.exists():
+                    license_file = path
+                    break
+            
             # Read license file if found
-            if license_path.exists():
-                with open(license_path, 'r', encoding='utf-8') as f:
+            if license_file:
+                with open(license_file, 'r', encoding='utf-8') as f:
                     license_content = f.read()
             else:
                 license_content = "License file not found. Please refer to the project repository for license information."
-
+            
         except Exception as e:
             license_content = f"Error reading license file: {str(e)}"
-
+        
         license_text.setText(license_content)
         license_layout.addWidget(license_text)
-
+        
         tab_widget.addTab(license_tab, "License")
 
         layout.addWidget(tab_widget, 1)
