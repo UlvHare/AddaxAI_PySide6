@@ -1,0 +1,412 @@
+# frontend/task_manager.py
+from PySide6.QtCore import QObject, QThread, Signal, Slot, QMutex, QWaitCondition
+
+from pathlib import Path
+import os
+import time
+import traceback
+
+from AddaxAI.backend import deploy, postprocess, human_verification, utils
+
+
+class TaskWorker(QObject):
+    """Worker class for running tasks in a separate thread."""
+
+    # Signals
+    started = Signal()
+    progress = Signal(str, str, int, str, str)  # task, status, progress, message, details
+    completed = Signal(str, bool, dict)  # task, success, results
+    error = Signal(str, str)  # task, error_message
+
+    def __init__(self, parent=None):
+        """Initialize the task worker."""
+        super().__init__(parent)
+        self.running = False
+        self.abort_requested = False
+        self.task_mutex = QMutex()
+        self.task_condition = QWaitCondition()
+        self.current_task = None
+        self.task_params = {}
+        self.cancel_callbacks = {}
+
+    @Slot(str, dict)
+    def start_task(self, task_name, parameters):
+        """Start a task with the given parameters.
+
+        Args:
+            task_name: Name of the task to execute
+            parameters: Dictionary of parameters for the task
+        """
+        self.task_mutex.lock()
+
+        # Store task and parameters
+        self.current_task = task_name
+        self.task_params = parameters
+        self.abort_requested = False
+
+        # Notify that we have a new task
+        self.task_condition.wakeAll()
+        self.task_mutex.unlock()
+
+    @Slot()
+    def run(self):
+        """Main execution loop for the worker thread."""
+        while True:
+            self.task_mutex.lock()
+
+            # Wait for a task to be available
+            if not self.current_task:
+                self.task_condition.wait(self.task_mutex)
+
+            task = self.current_task
+            params = self.task_params.copy()
+            self.running = True
+            self.task_mutex.unlock()
+
+            if task:
+                try:
+                    self.started.emit()
+
+                    # Execute the appropriate task
+                    if task == "detection":
+                        self._run_detection(params)
+                    elif task == "classification":
+                        self._run_classification(params)
+                    elif task == "postprocessing":
+                        self._run_postprocessing(params)
+                    elif task == "verification":
+                        self._run_verification(params)
+                    else:
+                        self.error.emit(task, f"Unknown task: {task}")
+
+                except Exception as e:
+                    error_message = f"Error in task {task}: {str(e)}\n{traceback.format_exc()}"
+                    self.error.emit(task, error_message)
+
+                finally:
+                    self.task_mutex.lock()
+                    self.current_task = None
+                    self.task_params = {}
+                    self.running = False
+                    self.task_mutex.unlock()
+
+    @Slot()
+    def cancel_task(self):
+        """Cancel the currently running task."""
+        self.task_mutex.lock()
+        self.abort_requested = True
+
+        # Call task-specific cancel callback if available
+        if self.current_task in self.cancel_callbacks:
+            self.cancel_callbacks[self.current_task]()
+
+        self.task_mutex.unlock()
+
+    def _progress_callback(self, process="", status="", cur_it=0, tot_it=100,
+                           time_ela="", time_rem="", speed="", hware="",
+                           cancel_func=None, frame_video_choice=None,
+                           extracting_frames_txt=""):
+        """General progress callback for backend functions.
+
+        This callback is passed to backend functions to report progress.
+        """
+        # Store cancel function if provided
+        if cancel_func and self.current_task:
+            self.cancel_callbacks[self.current_task] = cancel_func
+
+        # Convert parameters to a standard format for UI updates
+        task = self.current_task or ""
+        status_text = status
+        progress = 0
+        message = ""
+        details = ""
+
+        if status == "load":
+            message = "Loading models and preparing resources..."
+        elif status == "running":
+            if tot_it > 0:
+                progress = int(cur_it * 100 / tot_it)
+            message = f"Processing {cur_it} of {tot_it}"
+            details = f"Elapsed: {time_ela}, Remaining: {time_rem}, Speed: {speed}, Hardware: {hware}"
+        elif status == "extracting frames":
+            message = extracting_frames_txt or "Extracting frames..."
+            progress = -1  # Indeterminate progress
+        elif status == "done":
+            progress = 100
+            message = "Task completed successfully."
+
+        # Emit progress signal
+        self.progress.emit(task, status_text, progress, message, details)
+
+    def _check_abort(self):
+        """Check if abortion was requested.
+
+        Returns:
+            bool: True if abort was requested, False otherwise
+        """
+        self.task_mutex.lock()
+        aborted = self.abort_requested
+        self.task_mutex.unlock()
+        return aborted
+
+    def _run_detection(self, params):
+        """Run detection task.
+
+        Args:
+            params: Dictionary with task parameters
+        """
+        folder_path = params.get("folder_path")
+        simple_mode = params.get("simple_mode", True)
+        timelapse_mode = params.get("timelapse_mode", False)
+
+        if not folder_path or not os.path.isdir(folder_path):
+            self.error.emit("detection", f"Invalid folder path: {folder_path}")
+            return
+
+        # Create deployment instance
+        deployment = deploy.ModelDeployment(
+            folder_path,
+            progress_callback=self._progress_callback,
+            simple_mode=simple_mode,
+            timelapse_mode=timelapse_mode
+        )
+
+        # Store cancel method
+        self.cancel_callbacks["detection"] = deployment.cancel_process
+
+        # Check for images and videos
+        img_present, vid_present = deployment.check_folder_contents()
+
+        if not img_present and not vid_present:
+            self.error.emit("detection", "No images or videos found in the selected folder.")
+            return
+
+        # Process images if present
+        if img_present:
+            success_img = deployment.deploy_model("img")
+
+            # Check for abort
+            if self._check_abort():
+                self.completed.emit("detection", False, {"aborted": True})
+                return
+
+            # Check for classification model
+            if success_img and (simple_mode or deployment.global_vars.get('var_cls_model_idx', 0) > 0):
+                image_json = os.path.join(folder_path, "image_recognition_file.json")
+                success_cls = deploy.classify_detections(
+                    image_json, "img",
+                    progress_callback=self._progress_callback,
+                    simple_mode=simple_mode
+                )
+
+                if not success_cls and not self._check_abort():
+                    self.error.emit("detection", "Image classification failed.")
+
+            if not success_img and not self._check_abort():
+                self.error.emit("detection", "Image detection failed.")
+
+        # Process videos if present
+        if vid_present:
+            success_vid = deployment.deploy_model("vid")
+
+            # Check for abort
+            if self._check_abort():
+                self.completed.emit("detection", False, {"aborted": True})
+                return
+
+            # Check for classification model
+            if success_vid and (simple_mode or deployment.global_vars.get('var_cls_model_idx', 0) > 0):
+                video_json = os.path.join(folder_path, "video_recognition_file.json")
+                success_cls = deploy.classify_detections(
+                    video_json, "vid",
+                    progress_callback=self._progress_callback,
+                    simple_mode=simple_mode
+                )
+
+                if not success_cls and not self._check_abort():
+                    self.error.emit("detection", "Video classification failed.")
+
+            if not success_vid and not self._check_abort():
+                self.error.emit("detection", "Video detection failed.")
+
+        # Clean up
+        deployment.cleanup()
+
+        # Process results
+        if not self._check_abort():
+            deploy.process_results(folder_path, simple_mode, timelapse_mode)
+
+        # Return success if either images or videos were processed successfully
+        success = (img_present and success_img) or (vid_present and success_vid)
+        self.completed.emit("detection", success, {"folder_path": folder_path})
+
+    def _run_postprocessing(self, params):
+        """Run postprocessing task.
+
+        Args:
+            params: Dictionary with task parameters
+        """
+        src_dir = params.get("src_dir")
+        dst_dir = params.get("dst_dir")
+
+        if not src_dir or not dst_dir:
+            self.error.emit("postprocessing", "Source or destination directory not specified.")
+            return
+
+        # Ensure destination directory exists
+        os.makedirs(dst_dir, exist_ok=True)
+
+        # Get postprocessing parameters
+        thresh = params.get("thresh", 0.2)
+        separate = params.get("separate", False)
+        file_mode = params.get("file_mode", 1)  # 1=move, 2=copy
+        sep_conf = params.get("sep_conf", False)
+        visualize = params.get("visualize", False)
+        crop = params.get("crop", False)
+        export = params.get("export", False)
+        plot = params.get("plot", False)
+        export_format = params.get("export_format", "CSV")
+        data_type = params.get("data_type", "img")
+
+        # Run postprocessing
+        success = postprocess.postprocess(
+            src_dir, dst_dir, thresh, separate, file_mode,
+            sep_conf, visualize, crop, export, plot,
+            export_format, data_type, self._progress_callback
+        )
+
+        if success:
+            self.completed.emit("postprocessing", True,
+                               {"src_dir": src_dir, "dst_dir": dst_dir})
+        else:
+            self.completed.emit("postprocessing", False,
+                               {"src_dir": src_dir, "dst_dir": dst_dir})
+
+    def _run_verification(self, params):
+        """Run human verification task.
+
+        Args:
+            params: Dictionary with task parameters
+        """
+        folder_path = params.get("folder_path")
+        action = params.get("action", "prepare")  # prepare, start, complete, export
+
+        if not folder_path:
+            self.error.emit("verification", "Folder path not specified.")
+            return
+
+        if action == "prepare":
+            # Prepare verification
+            selection_criteria = params.get("selection_criteria", {})
+            result = human_verification.prepare_verification(
+                folder_path, selection_criteria, self._progress_callback
+            )
+            self.completed.emit("verification", True, {"result": result, "action": action})
+
+        elif action == "start":
+            # Start verification
+            result = human_verification.start_verification(folder_path, self._progress_callback)
+            self.completed.emit("verification", result, {"action": action})
+
+        elif action == "complete":
+            # Complete verification
+            result = human_verification.complete_verification(folder_path, self._progress_callback)
+            self.completed.emit("verification", True, {"result": result, "action": action})
+
+        elif action == "export":
+            # Export verified data
+            dst_dir = params.get("dst_dir")
+            copy_mode = params.get("copy_mode", True)
+
+            if not dst_dir:
+                self.error.emit("verification", "Destination directory not specified for export.")
+                return
+
+            # Ensure destination directory exists
+            os.makedirs(dst_dir, exist_ok=True)
+
+            # Export verified data
+            count = human_verification.export_verified_data(
+                folder_path, dst_dir, copy_mode, self._progress_callback
+            )
+
+            self.completed.emit("verification", True,
+                               {"count": count, "action": action, "dst_dir": dst_dir})
+        else:
+            self.error.emit("verification", f"Unknown verification action: {action}")
+
+class TaskManager(QObject):
+    """Manager for running background tasks in separate threads."""
+
+    # Signals
+    taskStarted = Signal(str)  # task name
+    taskProgress = Signal(str, str, int, str, str)  # task, status, progress, message, details
+    taskCompleted = Signal(str, bool, dict)  # task, success, results
+    taskError = Signal(str, str)  # task, error_message
+
+    def __init__(self, parent=None):
+        """Initialize the task manager."""
+        super().__init__(parent)
+
+        # Create thread and worker
+        self.thread = QThread()
+        self.worker = TaskWorker()
+
+        # Move worker to thread
+        self.worker.moveToThread(self.thread)
+
+        # Connect signals
+        self.worker.started.connect(self._on_task_started)
+        self.worker.progress.connect(self._on_task_progress)
+        self.worker.completed.connect(self._on_task_completed)
+        self.worker.error.connect(self._on_task_error)
+
+        # Connect thread signals
+        self.thread.started.connect(self.worker.run)
+
+        # Start the thread
+        self.thread.start()
+
+    def run_task(self, task_name, parameters):
+        """Run a task with the given parameters.
+
+        Args:
+            task_name: Name of the task to execute
+            parameters: Dictionary of parameters for the task
+        """
+        if self.thread.isRunning():
+            # Invoke the worker's start_task method
+            self.worker.start_task(task_name, parameters)
+
+    def cancel_task(self):
+        """Cancel the currently running task."""
+        if self.thread.isRunning():
+            self.worker.cancel_task()
+
+    def _on_task_started(self):
+        """Handle task started event."""
+        task = self.worker.current_task
+        if task:
+            self.taskStarted.emit(task)
+
+    def _on_task_progress(self, task, status, progress, message, details):
+        """Handle task progress updates."""
+        self.taskProgress.emit(task, status, progress, message, details)
+
+    def _on_task_completed(self, task, success, results):
+        """Handle task completion."""
+        self.taskCompleted.emit(task, success, results)
+
+    def _on_task_error(self, task, error_message):
+        """Handle task errors."""
+        self.taskError.emit(task, error_message)
+
+    def shutdown(self):
+        """Shutdown the task manager and clean up resources."""
+        if self.thread.isRunning():
+            # Cancel any running task
+            self.worker.cancel_task()
+
+            # Quit the thread and wait for it to finish
+            self.thread.quit()
+            self.thread.wait()
