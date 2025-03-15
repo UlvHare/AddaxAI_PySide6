@@ -73,6 +73,11 @@ class MainWindow(QMainWindow):
 
         # Применяем стиль
         self.apply_stylesheet()
+        
+        # Setup error handler
+        self.error_handler = ErrorHandler(self)
+        self.error_handler.errorOccurred.connect(self.on_error_occurred)
+        
 
     def setup_fonts(self):
         """Setup system fonts for the application."""
@@ -267,3 +272,18 @@ class MainWindow(QMainWindow):
 
         # Accept the close event
         event.accept()
+
+@Slot(str, str, str)
+def on_error_occurred(self, error_type, title, message):
+    """Handle application errors.
+    
+    Args:
+        error_type: Type of error
+        title: Dialog title
+        message: Error message
+    """
+    self.error_handler.show_error_dialog(error_type, title, message, self)
+    
+    # Log the error
+    logger.error(f"Application error ({error_type}): {message}")
+    
