@@ -1,7 +1,14 @@
 # frontend/simple_mode.py
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QFileDialog, QProgressBar, QMessageBox, QFrame
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QPushButton,
+    QLabel,
+    QFileDialog,
+    QProgressBar,
+    QMessageBox,
+    QFrame,
 )
 from PySide6.QtCore import Qt, Signal, Slot, QDir
 from PySide6.QtGui import QFont, QPixmap
@@ -41,7 +48,6 @@ class SimpleMode(QWidget):
         self.task_manager.taskCompleted.connect(self.on_task_completed)
         self.task_manager.taskError.connect(self.on_task_error)
 
-
     def setup_ui(self):
         """Set up the user interface for Simple Mode."""
         # Main layout
@@ -54,11 +60,17 @@ class SimpleMode(QWidget):
         header_layout = QHBoxLayout(header_widget)
 
         # Logo
-        logo_path = os.path.join(AddaxAI_files, "AddaxAI", "frontend", "resources", "logo.png")
+        logo_path = os.path.join(
+            AddaxAI_files, "AddaxAI", "frontend", "resources", "logo.png"
+        )
         if os.path.exists(logo_path):
             logo_label = QLabel()
             logo_pixmap = QPixmap(logo_path)
-            logo_label.setPixmap(logo_pixmap.scaled(120, 120, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            logo_label.setPixmap(
+                logo_pixmap.scaled(
+                    120, 120, Qt.KeepAspectRatio, Qt.SmoothTransformation
+                )
+            )
             header_layout.addWidget(logo_label)
 
         # Title
@@ -92,7 +104,9 @@ class SimpleMode(QWidget):
         folder_title = QLabel("Folder:")
         folder_title.setFixedWidth(60)
         self.folder_label = QLabel("No folder selected")
-        self.folder_label.setStyleSheet("background-color: rgba(255, 255, 255, 80); padding: 8px; border-radius: 4px;")
+        self.folder_label.setStyleSheet(
+            "background-color: rgba(255, 255, 255, 80); padding: 8px; border-radius: 4px;"
+        )
 
         self.folder_button = QPushButton("Select Folder")
         self.folder_button.clicked.connect(self.on_select_folder)
@@ -153,8 +167,10 @@ class SimpleMode(QWidget):
     def on_select_folder(self):
         """Handle folder selection button click."""
         folder = QFileDialog.getExistingDirectory(
-            self, "Select Folder with Images/Videos", QDir.homePath(),
-            QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks
+            self,
+            "Select Folder with Images/Videos",
+            QDir.homePath(),
+            QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks,
         )
 
         if folder:
@@ -182,31 +198,53 @@ class SimpleMode(QWidget):
         self.status_label.setText("Starting detection process...")
         self.detection_started.emit()
 
-        # Start detection task
-        self.task_manager.run_task("detection", {
-            "folder_path": self.selected_folder,
-            "simple_mode": True
-        })
+        # Mark operation in progress for crash recovery
+        if hasattr(self.parent(), "state_manager"):
+            self.parent().state_manager.mark_operation_in_progress(
+                self.folder_path, "simple_detection"
+            )
 
+            # Create backup of any existing results
+            self.parent().state_manager.backup_working_files(self.folder_path)
+
+        # Show dialog with progress bar
+        self.progress_dialog = ProgressDialog("Processing Images and Videos", self)
+        self.progress_dialog.cancelRequested.connect(self.task_manager.cancel_task)
+        self.progress_dialog.show()
+
+        # Start processing task
+        self.task_manager.run_task(
+            "detection", {"folder_path": self.folder_path, "simple_mode": True}
+        )
+
+        # Update status label
+        self.status_label.setText("Processing...")
+
+        # Start detection task
+        self.task_manager.run_task(
+            "detection", {"folder_path": self.selected_folder, "simple_mode": True}
+        )
 
     def on_cancel(self):
         """Handle cancel button click."""
         if self.is_running:
             reply = QMessageBox.question(
-                self, "Confirm Cancel",
+                self,
+                "Confirm Cancel",
                 "Are you sure you want to cancel the detection process?",
-                QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
             )
 
             if reply == QMessageBox.Yes:
                 self.status_label.setText("Cancelling detection process...")
                 self.task_manager.cancel_task()
 
-
     def on_view_results(self):
         """Handle view results button click."""
         if self.selected_folder:
             from AddaxAI.backend.utils import open_file_or_folder
+
             open_file_or_folder(self.selected_folder)
             self.status_label.setText("Opening results folder...")
 
@@ -294,7 +332,7 @@ class SimpleMode(QWidget):
             QMessageBox.critical(
                 self,
                 "Detection Error",
-                f"An error occurred during detection:\n\n{error_message}"
+                f"An error occurred during detection:\n\n{error_message}",
             )
 
             self.detection_completed.emit(False)
