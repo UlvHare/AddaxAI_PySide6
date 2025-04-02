@@ -3,8 +3,9 @@
 # GUI to simplify camera trap image analysis with species recognition models
 # https://addaxdatascience.com/addaxai/
 # Created by Peter van Lunteren
-# Latest edit by Peter van Lunteren on 27 Mar 2025
+# Latest edit by Peter van Lunteren on 1 Apr 2025
 
+# TODO: DEPTH - add depth estimation model: https://pytorch.org/hub/intelisl_midas_v2/
 # TODO: CLEAN - if the processing is done, and a image is deleted before the post processing, it crashes and just stops, i think it should just skip the file and then do the rest. I had to manually delete certain entries from the image_recognition_file.json to make it work
 # TODO: RESUME DOWNLOAD - make some sort of mechanism that either continues the model download when interrupted, or downloads it to /temp/ folder and only moves it to the correct location after succesful download. Otherwise delete from /temp/. That makes sure that users will not be able to continue with half downloaded models. 
 # TODO: BUG - when moving files during postprocessing and exporting xlsx on Windows, it errors with an "file is in use". There must be something going on with opening files... does not happen when copying files or on Mac. 
@@ -55,6 +56,7 @@
 #import packages like a very pointy half christmas tree
 import os
 import re
+import io
 import sys
 import cv2
 import json
@@ -122,7 +124,7 @@ else: # linux
 
 # set versions
 with open(os.path.join(AddaxAI_files, 'AddaxAI', 'version.txt'), 'r') as file:
-    current_EA_version = file.read().strip()
+    current_AA_version = file.read().strip()
 corresponding_model_info_version = "5"
 
 # colors
@@ -737,7 +739,7 @@ def csv_to_coco(detections_df, files_df, output_path):
             "url": "NA"
             }],
         "info": {
-            "description": f"Object detection results exported from AddaxAI (v{str(current_EA_version)}).",
+            "description": f"Object detection results exported from AddaxAI (v{str(current_AA_version)}).",
             "url": "https://addaxdatascience.com/addaxai/",
             "date_created": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
@@ -856,6 +858,309 @@ dtypes = {
     'max_confidence': 'float64',
 }
 
+# create dict with country codes for speciesnet
+countries = [
+    "ABW    \tAruba",
+    "AFG    \tAfghanistan",
+    "AGO    \tAngola",
+    "AIA    \tAnguilla",
+    "ALA    \t\u00c5land Islands",
+    "ALB    \tAlbania",
+    "AND    \tAndorra",
+    "ARE    \tUnited Arab Emirates",
+    "ARG    \tArgentina",
+    "ARM    \tArmenia",
+    "ASM    \tAmerican Samoa",
+    "ATA    \tAntarctica",
+    "ATF    \tFrench Southern Territories",
+    "ATG    \tAntigua and Barbuda",
+    "AUS    \tAustralia",
+    "AUT    \tAustria",
+    "AZE    \tAzerbaijan",
+    "BDI    \tBurundi",
+    "BEL    \tBelgium",
+    "BEN    \tBenin",
+    "BES    \tBonaire, Sint Eustatius and Saba",
+    "BFA    \tBurkina Faso",
+    "BGD    \tBangladesh",
+    "BGR    \tBulgaria",
+    "BHR    \tBahrain",
+    "BHS    \tBahamas",
+    "BIH    \tBosnia and Herzegovina",
+    "BLM    \tSaint Barth\u00e9lemy",
+    "BLR    \tBelarus",
+    "BLZ    \tBelize",
+    "BMU    \tBermuda",
+    "BOL    \tBolivia, Plurinational State of",
+    "BRA    \tBrazil",
+    "BRB    \tBarbados",
+    "BRN    \tBrunei Darussalam",
+    "BTN    \tBhutan",
+    "BVT    \tBouvet Island",
+    "BWA    \tBotswana",
+    "CAF    \tCentral African Republic",
+    "CAN    \tCanada",
+    "CCK    \tCocos (Keeling) Islands",
+    "CHE    \tSwitzerland",
+    "CHL    \tChile",
+    "CHN    \tChina",
+    "CIV    \tC\u00f4te d'Ivoire",
+    "CMR    \tCameroon",
+    "COD    \tCongo, Democratic Republic of the",
+    "COG    \tCongo",
+    "COK    \tCook Islands",
+    "COL    \tColombia",
+    "COM    \tComoros",
+    "CPV    \tCabo Verde",
+    "CRI    \tCosta Rica",
+    "CUB    \tCuba",
+    "CUW    \tCura\u00e7ao",
+    "CXR    \tChristmas Island",
+    "CYM    \tCayman Islands",
+    "CYP    \tCyprus",
+    "CZE    \tCzechia",
+    "DEU    \tGermany",
+    "DJI    \tDjibouti",
+    "DMA    \tDominica",
+    "DNK    \tDenmark",
+    "DOM    \tDominican Republic",
+    "DZA    \tAlgeria",
+    "ECU    \tEcuador",
+    "EGY    \tEgypt",
+    "ERI    \tEritrea",
+    "ESH    \tWestern Sahara",
+    "ESP    \tSpain",
+    "EST    \tEstonia",
+    "ETH    \tEthiopia",
+    "FIN    \tFinland",
+    "FJI    \tFiji",
+    "FLK    \tFalkland Islands (Malvinas)",
+    "FRA    \tFrance",
+    "FRO    \tFaroe Islands",
+    "FSM    \tMicronesia, Federated States of",
+    "GAB    \tGabon",
+    "GBR    \tUnited Kingdom of Great Britain and Northern Ireland",
+    "GEO    \tGeorgia",
+    "GGY    \tGuernsey",
+    "GHA    \tGhana",
+    "GIB    \tGibraltar",
+    "GIN    \tGuinea",
+    "GLP    \tGuadeloupe",
+    "GMB    \tGambia",
+    "GNB    \tGuinea-Bissau",
+    "GNQ    \tEquatorial Guinea",
+    "GRC    \tGreece",
+    "GRD    \tGrenada",
+    "GRL    \tGreenland",
+    "GTM    \tGuatemala",
+    "GUF    \tFrench Guiana",
+    "GUM    \tGuam",
+    "GUY    \tGuyana",
+    "HKG    \tHong Kong",
+    "HMD    \tHeard Island and McDonald Islands",
+    "HND    \tHonduras",
+    "HRV    \tCroatia",
+    "HTI    \tHaiti",
+    "HUN    \tHungary",
+    "IDN    \tIndonesia",
+    "IMN    \tIsle of Man",
+    "IND    \tIndia",
+    "IOT    \tBritish Indian Ocean Territory",
+    "IRL    \tIreland",
+    "IRN    \tIran, Islamic Republic of",
+    "IRQ    \tIraq",
+    "ISL    \tIceland",
+    "ISR    \tIsrael",
+    "ITA    \tItaly",
+    "JAM    \tJamaica",
+    "JEY    \tJersey",
+    "JOR    \tJordan",
+    "JPN    \tJapan",
+    "KAZ    \tKazakhstan",
+    "KEN    \tKenya",
+    "KGZ    \tKyrgyzstan",
+    "KHM    \tCambodia",
+    "KIR    \tKiribati",
+    "KNA    \tSaint Kitts and Nevis",
+    "KOR    \tKorea, Republic of",
+    "KWT    \tKuwait",
+    "LAO    \tLao People's Democratic Republic",
+    "LBN    \tLebanon",
+    "LBR    \tLiberia",
+    "LBY    \tLibya",
+    "LCA    \tSaint Lucia",
+    "LIE    \tLiechtenstein",
+    "LKA    \tSri Lanka",
+    "LSO    \tLesotho",
+    "LTU    \tLithuania",
+    "LUX    \tLuxembourg",
+    "LVA    \tLatvia",
+    "MAC    \tMacao",
+    "MAF    \tSaint Martin (French part)",
+    "MAR    \tMorocco",
+    "MCO    \tMonaco",
+    "MDA    \tMoldova, Republic of",
+    "MDG    \tMadagascar",
+    "MDV    \tMaldives",
+    "MEX    \tMexico",
+    "MHL    \tMarshall Islands",
+    "MKD    \tNorth Macedonia",
+    "MLI    \tMali",
+    "MLT    \tMalta",
+    "MMR    \tMyanmar",
+    "MNE    \tMontenegro",
+    "MNG    \tMongolia",
+    "MNP    \tNorthern Mariana Islands",
+    "MOZ    \tMozambique",
+    "MRT    \tMauritania",
+    "MSR    \tMontserrat",
+    "MTQ    \tMartinique",
+    "MUS    \tMauritius",
+    "MWI    \tMalawi",
+    "MYS    \tMalaysia",
+    "MYT    \tMayotte",
+    "NAM    \tNamibia",
+    "NCL    \tNew Caledonia",
+    "NER    \tNiger",
+    "NFK    \tNorfolk Island",
+    "NGA    \tNigeria",
+    "NIC    \tNicaragua",
+    "NIU    \tNiue",
+    "NLD    \tNetherlands, Kingdom of the",
+    "NOR    \tNorway",
+    "NPL    \tNepal",
+    "NRU    \tNauru",
+    "NZL    \tNew Zealand",
+    "OMN    \tOman",
+    "PAK    \tPakistan",
+    "PAN    \tPanama",
+    "PCN    \tPitcairn",
+    "PER    \tPeru",
+    "PHL    \tPhilippines",
+    "PLW    \tPalau",
+    "PNG    \tPapua New Guinea",
+    "POL    \tPoland",
+    "PRI    \tPuerto Rico",
+    "PRK    \tKorea, Democratic People's Republic of",
+    "PRT    \tPortugal",
+    "PRY    \tParaguay",
+    "PSE    \tPalestine, State of",
+    "PYF    \tFrench Polynesia",
+    "QAT    \tQatar",
+    "REU    \tR\u00e9union",
+    "ROU    \tRomania",
+    "RUS    \tRussian Federation",
+    "RWA    \tRwanda",
+    "SAU    \tSaudi Arabia",
+    "SDN    \tSudan",
+    "SEN    \tSenegal",
+    "SGP    \tSingapore",
+    "SGS    \tSouth Georgia and the South Sandwich Islands",
+    "SHN    \tSaint Helena, Ascension and Tristan da Cunha",
+    "SJM    \tSvalbard and Jan Mayen",
+    "SLB    \tSolomon Islands",
+    "SLE    \tSierra Leone",
+    "SLV    \tEl Salvador",
+    "SMR    \tSan Marino",
+    "SOM    \tSomalia",
+    "SPM    \tSaint Pierre and Miquelon",
+    "SRB    \tSerbia",
+    "SSD    \tSouth Sudan",
+    "STP    \tSao Tome and Principe",
+    "SUR    \tSuriname",
+    "SVK    \tSlovakia",
+    "SVN    \tSlovenia",
+    "SWE    \tSweden",
+    "SWZ    \tEswatini",
+    "SXM    \tSint Maarten (Dutch part)",
+    "SYC    \tSeychelles",
+    "SYR    \tSyrian Arab Republic",
+    "TCA    \tTurks and Caicos Islands",
+    "TCD    \tChad",
+    "TGO    \tTogo",
+    "THA    \tThailand",
+    "TJK    \tTajikistan",
+    "TKL    \tTokelau",
+    "TKM    \tTurkmenistan",
+    "TLS    \tTimor-Leste",
+    "TON    \tTonga",
+    "TTO    \tTrinidad and Tobago",
+    "TUN    \tTunisia",
+    "TUR    \tT\u00fcrkiye",
+    "TUV    \tTuvalu",
+    "TWN    \tTaiwan, Province of China",
+    "TZA    \tTanzania, United Republic of",
+    "UGA    \tUganda",
+    "UKR    \tUkraine",
+    "UMI    \tUnited States Minor Outlying Islands",
+    "URY    \tUruguay",
+    "USA-AL    \tUnited States of America - Alabama",
+    "USA-AK    \tUnited States of America - Alaska",
+    "USA-AZ    \tUnited States of America - Arizona",
+    "USA-AR    \tUnited States of America - Arkansas",
+    "USA-CA    \tUnited States of America - California",
+    "USA-CO    \tUnited States of America - Colorado",
+    "USA-CT    \tUnited States of America - Connecticut",
+    "USA-DE    \tUnited States of America - Delaware",
+    "USA-FL    \tUnited States of America - Florida",
+    "USA-GA    \tUnited States of America - Georgia",
+    "USA-HI    \tUnited States of America - Hawaii",
+    "USA-ID    \tUnited States of America - Idaho",
+    "USA-IL    \tUnited States of America - Illinois",
+    "USA-IN    \tUnited States of America - Indiana",
+    "USA-IA    \tUnited States of America - Iowa",
+    "USA-KS    \tUnited States of America - Kansas",
+    "USA-KY    \tUnited States of America - Kentucky",
+    "USA-LA    \tUnited States of America - Louisiana",
+    "USA-ME    \tUnited States of America - Maine",
+    "USA-MD    \tUnited States of America - Maryland",
+    "USA-MA    \tUnited States of America - Massachusetts",
+    "USA-MI    \tUnited States of America - Michigan",
+    "USA-MN    \tUnited States of America - Minnesota",
+    "USA-MS    \tUnited States of America - Mississippi",
+    "USA-MO    \tUnited States of America - Missouri",
+    "USA-MT    \tUnited States of America - Montana",
+    "USA-NE    \tUnited States of America - Nebraska",
+    "USA-NV    \tUnited States of America - Nevada",
+    "USA-NH    \tUnited States of America - New Hampshire",
+    "USA-NJ    \tUnited States of America - New Jersey",
+    "USA-NM    \tUnited States of America - New Mexico",
+    "USA-NY    \tUnited States of America - New York",
+    "USA-NC    \tUnited States of America - North Carolina",
+    "USA-ND    \tUnited States of America - North Dakota",
+    "USA-OH    \tUnited States of America - Ohio",
+    "USA-OK    \tUnited States of America - Oklahoma",
+    "USA-OR    \tUnited States of America - Oregon",
+    "USA-PA    \tUnited States of America - Pennsylvania",
+    "USA-RI    \tUnited States of America - Rhode Island",
+    "USA-SC    \tUnited States of America - South Carolina",
+    "USA-SD    \tUnited States of America - South Dakota",
+    "USA-TN    \tUnited States of America - Tennessee",
+    "USA-TX    \tUnited States of America - Texas",
+    "USA-UT    \tUnited States of America - Utah",
+    "USA-VT    \tUnited States of America - Vermont",
+    "USA-VA    \tUnited States of America - Virginia",
+    "USA-WA    \tUnited States of America - Washington",
+    "USA-WV    \tUnited States of America - West Virginia",
+    "USA-WI    \tUnited States of America - Wisconsin",
+    "USA-WY    \tUnited States of America - Wyoming",
+    "UZB    \tUzbekistan",
+    "VAT    \tHoly See",
+    "VCT    \tSaint Vincent and the Grenadines",
+    "VEN    \tVenezuela, Bolivarian Republic of",
+    "VGB    \tVirgin Islands (British)",
+    "VIR    \tVirgin Islands (U.S.)",
+    "VNM    \tViet Nam",
+    "VUT    \tVanuatu",
+    "WLF    \tWallis and Futuna",
+    "WSM    \tSamoa",
+    "YEM    \tYemen",
+    "ZAF    \tSouth Africa",
+    "ZMB    \tZambia",
+    "ZWE    \tZimbabwe"
+]
+# for simplicity, the same list is used for both english as spanish I'll fix everything properly in the new version
+dpd_options_sppnet_location = [countries, countries]
 
 # open progress window and initiate the post-process progress window
 def start_postprocess():
@@ -976,7 +1281,7 @@ def start_postprocess():
         
         # show error
         mb.showerror(title=error_txt[lang_idx],
-                     message=["An error has occurred", "Ha ocurrido un error"][lang_idx] + " (AddaxAI v" + current_EA_version + "): '" + str(error) + "'.",
+                     message=["An error has occurred", "Ha ocurrido un error"][lang_idx] + " (AddaxAI v" + current_AA_version + "): '" + str(error) + "'.",
                      detail=traceback.format_exc())
         
         # close window
@@ -2125,7 +2430,7 @@ def start_or_continue_hitl():
                 
                 # show error
                 mb.showerror(title=error_txt[lang_idx],
-                            message=["An error has occurred", "Ha ocurrido un error"][lang_idx] + " (AddaxAI v" + current_EA_version + "): '" + str(error) + "'.",
+                            message=["An error has occurred", "Ha ocurrido un error"][lang_idx] + " (AddaxAI v" + current_AA_version + "): '" + str(error) + "'.",
                             detail=traceback.format_exc())
     
     # start new session
@@ -2745,7 +3050,7 @@ def deploy_model(path_to_image_folder, selected_options, data_type, simple_mode 
         root.update()
     
     # create addaxai metadata
-    addaxai_metadata = {"addaxai_metadata" : {"version" : current_EA_version,
+    addaxai_metadata = {"addaxai_metadata" : {"version" : current_AA_version,
                                                   "custom_model" : custom_model_bool,
                                                   "custom_model_info" : {}}}
     if custom_model_bool:
@@ -2832,7 +3137,7 @@ def show_update_info(model_vars, model_name):
     su_root.columnconfigure(1, weight=1, minsize=300)
     lbl1 = customtkinter.CTkLabel(su_root, text=f"Update required for model {model_name}", font = main_label_font)
     lbl1.grid(row=0, column=0, padx=PADX, pady=(PADY, PADY/2), columnspan = 2, sticky="nsew")
-    lbl2 = customtkinter.CTkLabel(su_root, text=f"Minimum AddaxAI version required is v{model_vars['min_version']}, while your current version is v{current_EA_version}.")
+    lbl2 = customtkinter.CTkLabel(su_root, text=f"Minimum AddaxAI version required is v{model_vars['min_version']}, while your current version is v{current_AA_version}.")
     lbl2.grid(row=1, column=0, padx=PADX, pady=(0, PADY), columnspan = 2, sticky="nsew")
 
     # define functions
@@ -2852,7 +3157,7 @@ def show_update_info(model_vars, model_name):
     lmore_btn = customtkinter.CTkButton(btns_frm, text="Update", command=read_more)
     lmore_btn.grid(row=2, column=1, padx=(0, PADX), pady=PADY, sticky="nwse")
 
-# pop up window showing the user that a particular model needs downloading
+# check if a particular model needs downloading
 def model_needs_downloading(model_vars, model_type):
     model_name = var_cls_model.get() if model_type == "cls" else var_det_model.get()
     if model_name not in none_txt:
@@ -2873,6 +3178,24 @@ def model_needs_downloading(model_vars, model_type):
     else:
         # user selected none
         return [False, ""]
+
+# check if a particular environment needs downloading
+def environment_needs_downloading(model_vars):
+       
+    # find out which env is required
+    # if present take os-specific env else take general env
+    if os.name == 'nt': # windows
+        env_name = model_vars.get("env-windows", model_vars.get("env", "base"))
+    elif platform.system() == 'Darwin': # macos
+        env_name = model_vars.get("env-macos", model_vars.get("env", "base"))
+    else: # linux
+        env_name = model_vars.get("env-linux", model_vars.get("env", "base"))
+    
+    # check if that env is already present
+    if os.path.isdir(os.path.join(AddaxAI_files, "envs", f'env-{env_name}')):
+        return [False, env_name]
+    else:
+        return [True, env_name]
 
 # check if path contains special characters
 def contains_special_characters(path):
@@ -2996,6 +3319,58 @@ def start_deploy(simple_mode = False):
         sim_run_btn.configure(state=NORMAL)
         return
 
+    # run species net
+    if var_cls_model.get() == "SpeciesNet":
+        
+        # if simple mode, tell user to use the advanced mode
+        if simple_mode:
+            mb.showerror(["SpeciesNet not available", "SpeciesNet no disponible"][lang_idx],
+                            message=[f"SpeciesNet is not available in simple mode. Please switch to advanced mode to use SpeciesNet.",
+                                        f"SpeciesNet no está disponible en modo simple. Cambie al modo avanzado para usar SpeciesNet."][lang_idx])
+            
+            # reset
+            btn_start_deploy.configure(state=NORMAL)
+            sim_run_btn.configure(state=NORMAL)
+            return
+        
+        # if videos present, tell users that Species net cannot process them
+        if vid_present:
+            mb.showerror(["SpeciesNet not available", "SpeciesNet no disponible"][lang_idx],
+                            message=[f"SpeciesNet cannot process videos. Please select images only.",
+                                        f"SpeciesNet no puede procesar vídeos. Seleccione sólo imágenes."][lang_idx])
+            # reset
+            btn_start_deploy.configure(state=NORMAL)
+            sim_run_btn.configure(state=NORMAL)
+            return
+        
+        # check if env-speciesnet needs to be downloaded
+        model_vars = load_model_vars(model_type = "cls")
+        bool, env_name = environment_needs_downloading(model_vars)
+        if bool: # env needs be downloaded, ask user 
+            user_wants_to_download = download_environment(env_name, model_vars)
+            if not user_wants_to_download:
+                btn_start_deploy.configure(state=NORMAL)
+                sim_run_btn.configure(state=NORMAL)
+                return  # user doesn't want to download
+
+        # open progress window
+        sppnet_output_window = SpeciesNetOutputWindow()
+        sppnet_output_window.add_string("SpeciesNet is starting up...\n\n")
+
+        # deploy speciesnet
+        return_value = deploy_speciesnet(chosen_folder, sppnet_output_window)
+        
+        # due to a package conflict on macos there might need to be a restart
+        if return_value == "restart":
+            sppnet_output_window.add_string("\n\nRestarting SpeciesNet...\n\n")
+            deploy_speciesnet(chosen_folder, sppnet_output_window)
+            
+        # enable button
+        btn_start_deploy.configure(state=NORMAL)
+        sim_run_btn.configure(state=NORMAL)
+        sppnet_output_window.close()
+        return
+
     # note if user is video analysing without smoothing
     global warn_smooth_vid
     if (var_cls_model.get() not in none_txt) and \
@@ -3096,6 +3471,21 @@ def start_deploy(simple_mode = False):
                 sim_run_btn.configure(state=NORMAL)
                 return  # user doesn't want to download
 
+    # check if environment need to be downloaded
+    if simple_mode:
+        var_det_model.set("MegaDetector 5a")
+    for model_type in ["cls", "det"]:
+        model_vars = load_model_vars(model_type = model_type)
+        if model_vars == {}: # if selected model is None
+            continue
+        bool, env_name = environment_needs_downloading(model_vars)
+        if bool: # env needs be downloaded, ask user 
+            user_wants_to_download = download_environment(env_name, model_vars)
+            if not user_wants_to_download:
+                btn_start_deploy.configure(state=NORMAL)
+                sim_run_btn.configure(state=NORMAL)
+                return  # user doesn't want to download
+
     # run some checks that make sense for both simple and advanced mode
     # check if chosen folder is valid
     if chosen_folder in ["", "/", "\\", ".", "~", ":"] or not os.path.isdir(chosen_folder):
@@ -3109,7 +3499,8 @@ def start_deploy(simple_mode = False):
     # save simple settings for next time
     write_global_vars({
         "lang_idx": lang_idx,
-        "var_cls_model_idx": dpd_options_cls_model[lang_idx].index(var_cls_model.get())
+        "var_cls_model_idx": dpd_options_cls_model[lang_idx].index(var_cls_model.get()),
+        "var_sppnet_location_idx": dpd_options_sppnet_location[lang_idx].index(var_sppnet_location.get()),
     })
 
     # simple_mode and advanced mode shared image settings
@@ -3504,7 +3895,7 @@ def start_deploy(simple_mode = False):
         else:
             # show error
             mb.showerror(title=error_txt[lang_idx],
-                        message=["An error has occurred", "Ha ocurrido un error"][lang_idx] + " (AddaxAI v" + current_EA_version + "): '" + str(error) + "'.",
+                        message=["An error has occurred", "Ha ocurrido un error"][lang_idx] + " (AddaxAI v" + current_AA_version + "): '" + str(error) + "'.",
                         detail=subprocess_output + "\n" + traceback.format_exc())
             
             # close window
@@ -3859,7 +4250,7 @@ def select_detections(selection_dict, prepare_files):
             
             # show error
             mb.showerror(title=error_txt[lang_idx],
-                        message=["An error has occurred", "Ha ocurrido un error"][lang_idx] + " (AddaxAI v" + current_EA_version + "): '" + str(error) + "'.",
+                        message=["An error has occurred", "Ha ocurrido un error"][lang_idx] + " (AddaxAI v" + current_AA_version + "): '" + str(error) + "'.",
                         detail=traceback.format_exc())
 
     # change json paths back, if converted earlier
@@ -4243,7 +4634,8 @@ def indent(elem, level=0):
 def on_toplevel_close():
     write_global_vars({
         "lang_idx": lang_idx,
-        "var_cls_model_idx": dpd_options_cls_model[lang_idx].index(var_cls_model.get())
+        "var_cls_model_idx": dpd_options_cls_model[lang_idx].index(var_cls_model.get()),
+        "var_sppnet_location_idx": dpd_options_sppnet_location[lang_idx].index(var_sppnet_location.get())
         })
     root.destroy()
 
@@ -4281,6 +4673,336 @@ def fix_images(image_paths):
             except Exception as e:
                 print(f"Could not fix image: {e}")
 
+# remove non ansi characters from text
+def remove_ansi_escape_sequences(text):
+    ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+    return ansi_escape.sub('', text)
+
+# classes to open window with speciesnet output
+class SpeciesNetOutputWindow:
+    def __init__(self):
+        self.sppnet_output_window_root = customtkinter.CTkToplevel(root)
+        self.sppnet_output_window_root.title("SpeciesNet output")
+        self.text_area = tk.Text(self.sppnet_output_window_root, wrap=tk.WORD, height=7, width=85)
+        self.text_area.pack(padx=10, pady=10)
+        self.close_button = tk.Button(self.sppnet_output_window_root, text="Cancel", command=self.cancel)
+        self.close_button.pack(pady=5)
+        self.sppnet_output_window_root.protocol("WM_DELETE_WINDOW", self.close)  # Handle window close
+        bring_window_to_top_but_not_for_ever(self.sppnet_output_window_root)
+    
+    def add_string(self, text, process=None):
+        if process is not None:
+            self.process = process
+        if text.strip():
+            print(text)
+            
+            clean_text = remove_ansi_escape_sequences(text)
+
+            # Check if this is a progress bar update
+            is_pbar = "%" in clean_text
+
+            if not is_pbar:
+                # Insert non-progress-bar messages above the progress section
+                self.text_area.insert(tk.END, clean_text + "\n")  # Insert at the top
+                self.text_area.see(tk.END)
+                self.sppnet_output_window_root.update()
+                return  # Exit function early, don't process as a progress bar
+
+            # Ensure attributes exist before updating
+            if not hasattr(self, "detector_preprocess_line"):
+                self.detector_preprocess_line =   " Detector preprocess:   0%\n"
+            if not hasattr(self, "detector_predict_line"):
+                self.detector_predict_line =      " Detector predict:      0%\n"
+            if not hasattr(self, "classifier_preprocess_line"):
+                self.classifier_preprocess_line = " Classifier preprocess: 0%\n"
+            if not hasattr(self, "classifier_predict_line"):
+                self.classifier_predict_line =    " Classifier predict:    0%\n"
+            if not hasattr(self, "geolocation_line"):
+                self.geolocation_line =           " Geolocation:           0%\n"
+
+            # Update progress bar lines based on prefixes
+            if clean_text.startswith("Detector preprocess"):
+                self.detector_preprocess_line = clean_text
+            elif clean_text.startswith("Detector predict"):
+                self.detector_predict_line = clean_text
+            elif clean_text.startswith("Classifier preprocess"):
+                self.classifier_preprocess_line = clean_text
+            elif clean_text.startswith("Classifier predict"):
+                self.classifier_predict_line = clean_text
+            elif clean_text.startswith("Geolocation"):
+                self.geolocation_line = clean_text
+
+            # Insert all progress bars together to maintain order
+            self.text_area.insert(tk.END, f"\n {self.detector_preprocess_line}", "progress")
+            self.text_area.insert(tk.END, f" {self.detector_predict_line}", "progress")
+            self.text_area.insert(tk.END, f" {self.classifier_preprocess_line}", "progress")
+            self.text_area.insert(tk.END, f" {self.classifier_predict_line}", "progress")
+            self.text_area.insert(tk.END, f" {self.geolocation_line}", "progress")
+
+            # Ensure scrolling to the latest update
+            self.text_area.see(tk.END)
+            self.sppnet_output_window_root.update()
+    
+    def close(self):
+        self.sppnet_output_window_root.destroy()
+        
+    def cancel(self):
+        global cancel_speciesnet_deploy_pressed
+        global btn_start_deploy
+        global sim_run_btn
+        if os.name == 'nt':
+            Popen(f"TASKKILL /F /PID {self.process.pid} /T")
+        else:
+            os.killpg(os.getpgid(self.process.pid), signal.SIGTERM)
+        btn_start_deploy.configure(state=NORMAL)
+        sim_run_btn.configure(state=NORMAL)
+        cancel_speciesnet_deploy_pressed = True
+        self.sppnet_output_window_root.destroy()
+
+# temporary function to deploy speciesnet
+def deploy_speciesnet(chosen_folder, sppnet_output_window, simple_mode = False):
+    # log
+    print(f"EXECUTED: {sys._getframe().f_code.co_name}({locals()})\n")
+    
+    # prepare variables
+    chosen_folder = str(Path(chosen_folder))
+    python_executable = get_python_interprator("speciesnet")
+    sppnet_output_file = os.path.join(chosen_folder, "sppnet_output_file.json")
+
+    # save settings for next time
+    write_global_vars({
+        "lang_idx": lang_idx,
+        "var_cls_model_idx": dpd_options_cls_model[lang_idx].index(var_cls_model.get()),
+        "var_sppnet_location_idx": dpd_options_sppnet_location[lang_idx].index(var_sppnet_location.get())
+    })
+    
+    # save advanced settings for next time
+    if not simple_mode:
+        write_global_vars({
+            "var_det_model_idx": dpd_options_model[lang_idx].index(var_det_model.get()),
+            "var_det_model_path": var_det_model_path.get(),
+            "var_det_model_short": var_det_model_short.get(),
+            "var_exclude_subs": var_exclude_subs.get(),
+            "var_use_custom_img_size_for_deploy": var_use_custom_img_size_for_deploy.get(),
+            "var_image_size_for_deploy": var_image_size_for_deploy.get() if var_image_size_for_deploy.get().isdigit() else "",
+            "var_abs_paths": var_abs_paths.get(),
+            "var_disable_GPU": var_disable_GPU.get(),
+            "var_process_img": var_process_img.get(),
+            "var_use_checkpnts": var_use_checkpnts.get(),
+            "var_checkpoint_freq": var_checkpoint_freq.get() if var_checkpoint_freq.get().isdecimal() else "",
+            "var_cont_checkpnt": var_cont_checkpnt.get(),
+            "var_process_vid": var_process_vid.get(),
+            "var_not_all_frames": var_not_all_frames.get(),
+            "var_nth_frame": var_nth_frame.get() if var_nth_frame.get().isdecimal() else ""
+        })
+    
+    # get param values
+    model_vars = load_model_vars()
+    if simple_mode:
+        cls_detec_thresh = model_vars["var_cls_detec_thresh_default"]
+    else:
+        cls_detec_thresh = var_cls_detec_thresh.get()
+
+    # get location information
+    location_args = []
+    country_code = var_sppnet_location.get()[:3]
+    location_args.append(f"--country={country_code}")
+    if country_code == "USA":
+        state_code = var_sppnet_location.get()[4:6]
+        location_args.append(f"--admin1_region={state_code}")
+    write_global_vars({
+        "var_sppnet_location_idx": dpd_options_sppnet_location[lang_idx].index(var_sppnet_location.get())
+    })
+
+    # create commands for Windows
+    if os.name == 'nt':
+        if location_args == []:
+            command = [python_executable, "-m", "speciesnet.scripts.run_model", f"--folders={chosen_folder}", f"--predictions_json={sppnet_output_file}"]
+        else:
+            command = [python_executable, "-m", "speciesnet.scripts.run_model", f"--folders={chosen_folder}", f"--predictions_json={sppnet_output_file}", *location_args]
+
+     # create command for MacOS and Linux
+    else:
+        if location_args == []:
+            command = [f"'{python_executable}' -m speciesnet.scripts.run_model --folders='{chosen_folder}' --predictions_json='{sppnet_output_file}'"]
+        else:
+            location_args = "' '".join(location_args)
+            command = [f"'{python_executable}' -m speciesnet.scripts.run_model --folders='{chosen_folder}' --predictions_json='{sppnet_output_file}' '{location_args}'"]
+    
+    # log command
+    print("command:")
+    print(json.dumps(command, indent=4))
+
+    # prepare process and cancel method per OS
+    if os.name == 'nt':
+        # run windows command
+        p = Popen(command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                bufsize=1,
+                shell=True,
+                universal_newlines=True)
+
+    else:
+        # run unix command
+        p = Popen(command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                bufsize=1,
+                shell=True,
+                universal_newlines=True,
+                preexec_fn=os.setsid)
+
+    global cancel_speciesnet_deploy_pressed
+    cancel_speciesnet_deploy_pressed = False
+
+    # read output
+    for line in p.stdout:
+        
+        # log
+        sppnet_output_window.add_string(line, p)
+        
+        # early exit if cancel button is pressed
+        if cancel_speciesnet_deploy_pressed:
+            sppnet_output_window.add_string("\n\nCancel button pressed!")
+            time.sleep(2)
+            return
+        
+        # temporary fix for macOS package conflict
+        # since the env is compiled on macOS 10.15, scipy is not compatible with macOS 10.14
+        if line.startswith("ImportError: "):
+            sppnet_output_window.add_string(f"\n\nThere seems to be a mismatch between macOS versions: {line}\n\n")
+            sppnet_output_window.add_string("Attempting to solve conflict automatically...\n\n")
+            
+            # uninstall scipy
+            p = Popen(f"{python_executable} -m pip uninstall -y scipy",
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                bufsize=1,
+                shell=True,
+                universal_newlines=True,
+                preexec_fn=os.setsid)
+            for line in p.stdout:
+                sppnet_output_window.add_string(line)
+            
+            # install scipy again
+            p = Popen(f"{python_executable} -m pip install --no-cache-dir scipy",
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                bufsize=1,
+                shell=True,
+                universal_newlines=True,
+                preexec_fn=os.setsid)
+            for line in p.stdout:
+                sppnet_output_window.add_string(line)
+            
+            # retry
+            return "restart"
+    
+    # convert json to AddaxAI format
+    sppnet_output_window.add_string("\n\nConverting SpeciesNet output to AddaxAI format...")
+    speciesnet_to_md_py = os.path.join(AddaxAI_files, "AddaxAI", "classification_utils", "model_types", "speciesnet_to_md.py")
+    recognition_file = os.path.join(chosen_folder, "image_recognition_file.json")
+    
+    # cmd for windows
+    if os.name == 'nt': 
+        p = Popen([f"{python_executable}", f"{speciesnet_to_md_py}", f"{sppnet_output_file}", f"{recognition_file}"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                bufsize=1,
+                shell=True,
+                universal_newlines=True)
+    
+    # cmd for macos and linux
+    else: 
+        p = Popen([f'"{python_executable}" "{speciesnet_to_md_py}" "{sppnet_output_file}" "{recognition_file}"'],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                bufsize=1,
+                shell=True,
+                universal_newlines=True,
+                preexec_fn=os.setsid)
+    
+    # log output
+    for line in p.stdout:
+        sppnet_output_window.add_string(line, p)
+    sppnet_output_window.add_string("\n\nConverting Done!")
+    
+    # if that is done, remove the speciesnet output file
+    if os.path.exists(sppnet_output_file):
+        os.remove(sppnet_output_file)
+    
+    # create addaxai metadata
+    sppnet_output_window.add_string("\n\nAdding AddaxAI metadata...")
+    addaxai_metadata = {"addaxai_metadata" : {"version" : current_AA_version,
+                                                  "custom_model" : False,
+                                                  "custom_model_info" : {}}}
+    
+    # write metadata to json and make abosulte if specified
+    append_to_json(recognition_file, addaxai_metadata)
+    
+    # get rid of absolute paths if specified
+    if check_json_paths(recognition_file) == "absolute":
+        make_json_relative(recognition_file)
+    
+    # if in timelapse mode, change name of recognition file
+    if timelapse_mode:
+        timelapse_json = os.path.join(chosen_folder, "timelapse_recognition_file.json")
+        os.rename(recognition_file, timelapse_json)
+        mb.showinfo("Analaysis done!", f"Recognition file created at \n\n{timelapse_json}\n\nTo use it in Timelapse, return to "
+                                        "Timelapse with the relevant image set open, select the menu item 'Recognition > Import "
+                                        "recognition data for this image set' and navigate to the file above.")
+        open_file_or_folder(os.path.dirname(timelapse_json))
+        
+    # convert JSON to AddaxAI format if not in timelapse mode
+    else:
+        with open(recognition_file) as image_recognition_file_content:
+            data = json.load(image_recognition_file_content)
+
+            # fetch and invert label maps
+            cls_label_map = data['classification_categories']
+            det_label_map = data['detection_categories']
+            inverted_cls_label_map = {v: k for k, v in cls_label_map.items()}
+            inverted_det_label_map = {v: k for k, v in det_label_map.items()}
+
+            # add cls classes to det label map
+            # if a model shares category names with MD, add to existing value
+            for k, _ in inverted_cls_label_map.items():
+                if k in inverted_det_label_map.keys(): 
+                    value = str(inverted_det_label_map[k])
+                    inverted_det_label_map[k] = value
+                else:              
+                    inverted_det_label_map[k] = str(len(inverted_det_label_map) + 1)
+
+            # loop and adjust
+            for image in data['images']:
+                if 'detections' in image:
+                    for detection in image['detections']:
+                        category_id = detection['category']
+                        category_conf = detection['conf']
+                        if category_conf >= cls_detec_thresh and det_label_map[category_id] == "animal":
+                            if 'classifications' in detection:
+                                highest_classification = detection['classifications'][0]
+                                class_idx = highest_classification[0]
+                                class_name = cls_label_map[class_idx]
+                                detec_idx = inverted_det_label_map[class_name]
+                                detection['prev_conf'] = detection["conf"]
+                                detection['prev_category'] = detection['category']
+                                detection["conf"] = highest_classification[1]
+                                detection['category'] = str(detec_idx)
+
+        # write json to be used by AddaxAI
+        data['detection_categories_original'] = data['detection_categories']
+        data['detection_categories'] = {v: k for k, v in inverted_det_label_map.items()}
+        
+        # overwrite the file wit adjusted data
+        with open(recognition_file, "w") as json_file:
+            json.dump(data, json_file, indent=1)
+
+    # reset window
+    update_frame_states()
+    root.update()
+
 # convert pascal bbox to yolo
 def convert_bbox_pascal_to_yolo(size, box):
     dw = 1./(size[0])
@@ -4297,6 +5019,13 @@ def convert_bbox_pascal_to_yolo(size, box):
 
 # special function because the sim dpd has a different value for 'None'
 def sim_mdl_dpd_callback(self):
+    
+    # this means the user chose SpeciesNet in simple mode, so tell user to use the advanced mode
+    if self == "SpeciesNet":
+        mb.showerror(["SpeciesNet not available", "SpeciesNet no disponible"][lang_idx],
+                        message=[f"SpeciesNet is not available in simple mode. Please switch to advanced mode to use SpeciesNet.",
+                                    f"SpeciesNet no está disponible en modo simple. Cambie al modo avanzado para usar SpeciesNet."][lang_idx])
+    
     var_cls_model.set(dpd_options_cls_model[lang_idx][sim_dpd_options_cls_model[lang_idx].index(self)])
     model_cls_animal_options(var_cls_model.get())
 
@@ -4407,7 +5136,7 @@ def extract_label_map_from_model(model_file):
         # show error
         mb.showerror(title=error_txt[lang_idx],
                      message=["An error has occurred when trying to extract classes", "Se ha producido un error al intentar extraer las clases"][lang_idx] +
-                                " (AddaxAI v" + current_EA_version + "): '" + str(error) + "'" +
+                                " (AddaxAI v" + current_AA_version + "): '" + str(error) + "'" +
                                 [".\n\nWill try to proceed and produce the output json file, but post-processing features of AddaxAI will not work.",
                                  ".\n\nIntentará continuar y producir el archivo json de salida, pero las características de post-procesamiento de AddaxAI no funcionarán."][lang_idx],
                      detail=traceback.format_exc())
@@ -4429,10 +5158,10 @@ def fetch_label_map_from_json(path_to_json):
     return label_map
 
 # check if json paths are relative or absolute
-def check_json_paths(path_to_json):
+def check_json_paths(path_to_json): 
     with open(path_to_json, "r") as json_file:
         data = json.load(json_file)
-    path = data['images'][0]['file']
+    path = os.path.normpath(data['images'][0]['file'])
     if path.startswith(os.path.normpath(var_choose_folder.get())):
         return "absolute"
     else:
@@ -4447,7 +5176,7 @@ def make_json_relative(path_to_json):
         
         # adjust
         for image in data['images']:
-            absolute_path = image['file']
+            absolute_path =  os.path.normpath(image['file'])
             relative_path = absolute_path.replace(os.path.normpath(var_choose_folder.get()), "")[1:]
             image['file'] = relative_path
         
@@ -4661,13 +5390,30 @@ def model_cls_animal_options(self):
     
     # get model specific variable values
     global sim_spp_scr
-    if self not in none_txt:
+    if self not in none_txt and self != "SpeciesNet": # normal procedure for all classifiers other than speciesnet
         model_vars = load_model_vars()
         dsp_choose_classes.configure(text = f"{len(model_vars['selected_classes'])} of {len(model_vars['all_classes'])}")
         var_cls_detec_thresh.set(model_vars["var_cls_detec_thresh"])
         var_cls_class_thresh.set(model_vars["var_cls_class_thresh"])
         var_smooth_cls_animal.set(model_vars["var_smooth_cls_animal"])
-    
+
+        # remove widgets of species net
+        lbl_sppnet_location.grid_remove()
+        dpd_sppnet_location.grid_remove()
+
+        # show widgets for other classifiers
+        lbl_choose_classes.grid(row=row_choose_classes, sticky='nesw', pady=2)
+        btn_choose_classes.grid(row=row_choose_classes, column=1, sticky='nesw', padx=5)
+        dsp_choose_classes.grid(row=row_choose_classes, column=0, sticky='e', padx=0)
+        lbl_cls_class_thresh.grid(row=row_cls_class_thresh, sticky='nesw', pady=2)
+        scl_cls_class_thresh.grid(row=row_cls_class_thresh, column=1, sticky='ew', padx=10)
+        dsp_cls_class_thresh.grid(row=row_cls_class_thresh, column=0, sticky='e', padx=0)
+        lbl_smooth_cls_animal.grid(row=row_smooth_cls_animal, sticky='nesw', pady=2)
+        chb_smooth_cls_animal.grid(row=row_smooth_cls_animal, column=1, sticky='nesw', padx=5)
+        
+        # set rowsize
+        set_minsize_rows(cls_frame)
+
         # adjust simple_mode window
         sim_spp_lbl.configure(text_color = "black")
         sim_spp_scr.grid_forget()
@@ -4676,6 +5422,34 @@ def model_cls_animal_options(self):
                                             all_classes=model_vars['all_classes'],
                                             selected_classes=model_vars['selected_classes'],
                                             command = on_spp_selection)
+        sim_spp_scr._scrollbar.configure(height=0)
+        sim_spp_scr.grid(row=1, column=0, padx=PADX, pady=(PADY/4, PADY), sticky="ew", columnspan = 2)
+
+    elif self == "SpeciesNet": # special procedure for speciesnet
+        
+        # remove widgets for other classifiers
+        lbl_choose_classes.grid_remove()
+        btn_choose_classes.grid_remove()
+        dsp_choose_classes.grid_remove()
+        lbl_cls_class_thresh.grid_remove()
+        scl_cls_class_thresh.grid_remove()
+        dsp_cls_class_thresh.grid_remove()
+        lbl_smooth_cls_animal.grid_remove()
+        chb_smooth_cls_animal.grid_remove()
+        
+        # set rowsize to 0
+        cls_frame.grid_rowconfigure(2, minsize=0)
+        cls_frame.grid_rowconfigure(3, minsize=0)
+        cls_frame.grid_rowconfigure(4, minsize=0)
+        
+        # place widgets for speciesnet
+        lbl_sppnet_location.grid(row=row_sppnet_location, sticky='nesw', pady=2)
+        dpd_sppnet_location.grid(row=row_sppnet_location, column=1, sticky='nesw', padx=5, pady=2)
+        
+        # set selection frame to dummy spp again
+        sim_spp_lbl.configure(text_color = "grey")
+        sim_spp_scr.grid_forget()
+        sim_spp_scr = SpeciesSelectionFrame(master=sim_spp_frm, height=sim_spp_scr_height, dummy_spp = True)
         sim_spp_scr._scrollbar.configure(height=0)
         sim_spp_scr.grid(row=1, column=0, padx=PADX, pady=(PADY/4, PADY), sticky="ew", columnspan = 2)
 
@@ -4688,7 +5462,10 @@ def model_cls_animal_options(self):
         sim_spp_scr.grid(row=1, column=0, padx=PADX, pady=(PADY/4, PADY), sticky="ew", columnspan = 2)
 
     # save settings
-    write_global_vars({"var_cls_model_idx": dpd_options_cls_model[lang_idx].index(var_cls_model.get())}) # write index instead of value
+    write_global_vars({
+        "var_cls_model_idx": dpd_options_cls_model[lang_idx].index(var_cls_model.get()),  # write index instead of value
+        "var_sppnet_location_idx": dpd_options_sppnet_location[lang_idx].index(var_sppnet_location.get()),  # write index instead of value
+        })
  
     # finish up
     toggle_cls_frame()
@@ -5088,7 +5865,7 @@ def show_release_info(release):
 
 # check if the user needs an update
 def needs_EA_update(required_version):
-    current_parts = list(map(int, current_EA_version.split('.')))
+    current_parts = list(map(int, current_AA_version.split('.')))
     required_parts = list(map(int, required_version.split('.')))
 
     # Pad the shorter version with zeros
@@ -5151,7 +5928,7 @@ def download_model(model_dir, skip_ask=False):
             response.raise_for_status()
             
             with open(file_path, 'wb') as file:
-                for chunk in response.iter_content(chunk_size=8192):
+                for chunk in response.iter_content(chunk_size=65536):
                     if chunk:
                         file.write(chunk)
                         progress_bar.update(len(chunk))
@@ -5173,6 +5950,151 @@ def download_model(model_dir, skip_ask=False):
             # file_path is not set, meaning there is no incomplete download
             pass
         show_download_error_window(model_title, model_dir, model_vars)
+
+# download envrionment
+def download_environment(env_name, model_vars, skip_ask=False):
+    
+    # download
+    try:        
+        
+        env_dir = os.path.join(AddaxAI_files, "envs")
+        # set environment variables
+        if os.name == 'nt': # windows
+            download_pinned_url = f"https://addaxaipremiumstorage.blob.core.windows.net/github-zips/v{current_AA_version}/windows/envs/env-{env_name}.zip"
+            download_latest_url = f"https://addaxaipremiumstorage.blob.core.windows.net/github-zips/latest/windows/envs/env-{env_name}.zip"
+            filename = f"{env_name}.zip"
+        elif platform.system() == 'Darwin': # macos
+            import tarfile
+            download_pinned_url = f"https://addaxaipremiumstorage.blob.core.windows.net/github-zips/v{current_AA_version}/macos/envs/env-{env_name}.tar.xz"
+            download_latest_url = f"https://addaxaipremiumstorage.blob.core.windows.net/github-zips/latest/macos/envs/env-{env_name}.tar.xz"
+            filename = f"{env_name}.tar.xz"
+        else: # linux
+            return False # linux install this during setup 
+
+        # set headers to trick host to thinking we are a browser
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:66.0) Gecko/20100101 Firefox/66.0",
+            "Accept-Encoding": "*",
+            "Connection": "keep-alive"
+        }
+
+        # check the total size first
+        try:
+            # first try the pinned version
+            total_size = 0
+            response = requests.get(download_pinned_url, stream=True, timeout=60, headers=headers)
+            response.raise_for_status()
+            total_size += int(response.headers.get('content-length', 0))
+            download_url = download_pinned_url
+        except:
+            # if that link doesn't woprk anymore, revert back to the latest version
+            total_size = 0
+            response = requests.get(download_latest_url, stream=True, timeout=60, headers=headers)
+            response.raise_for_status()
+            total_size += int(response.headers.get('content-length', 0))
+            download_url = download_latest_url
+
+        # check if the user wants to download
+        if not skip_ask:
+            if not mb.askyesno(["Download required", "Descarga necesaria"][lang_idx],
+                            [f"The model you selected needs the virtual environment '{env_name}', which is not downloaded yet. It will take {format_size(total_size)}"
+                            f" of storage. Do you want to download?", f"El envo {env_name} aún no se ha descargado."
+                            f" Ocupará {format_size(total_size)} de almacenamiento. ¿Desea descargarlo?"][lang_idx]):
+                return False
+
+        # if yes, initiate download and show progress
+        progress_bar = tqdm(total=total_size, unit='B', unit_scale=True)
+        download_popup = EnvDownloadProgressWindow(env_title = env_name, total_size_str = format_size(total_size))
+        download_popup.open()
+        file_path = os.path.join(env_dir, filename)
+        response = requests.get(download_url, stream=True, timeout=60, headers=headers)
+        response.raise_for_status()
+        with open(file_path, 'wb') as file:
+            for chunk in response.iter_content(chunk_size=65536):
+                if chunk:
+                    file.write(chunk)
+                    progress_bar.update(len(chunk))
+                    percentage_done = progress_bar.n / total_size
+                    download_popup.update_download_progress(percentage_done)
+        progress_bar.close()
+        print(f"Download successful. File saved at: {file_path}")
+        
+        # After download, begin extraction
+        if filename.endswith(".tar.xz"):
+            # Extract the .tar.xz file
+            with tarfile.open(file_path, "r:xz") as tar:
+                # Get the total number of files to be extracted
+                total_files = len(tar.getnames())
+                extraction_progress_bar = tqdm(total=total_files, unit='file', desc="Extracting")
+                
+                # Extract each file and update the extraction progress
+                for member in tar:
+                    tar.extract(member, path=env_dir)
+                    extraction_progress_bar.update(1)
+                    extraction_progress_percentage = extraction_progress_bar.n / total_files
+                    download_popup.update_extraction_progress(extraction_progress_percentage)
+                extraction_progress_bar.close()
+            download_popup.close()
+            print(f"Extraction successful. Files extracted to: {env_dir}")
+
+            # Remove the .tar.xz file after extraction
+            try:
+                os.remove(file_path)
+                print(f"Removed the .tar.xz file: {file_path}")
+            except Exception as e:
+                print(f"Error removing file: {e}")
+
+        if filename.endswith(".zip"):
+            import zipfile
+            # open the zip file for extraction
+            with zipfile.ZipFile(file_path, 'r') as zip_ref:
+                # get the total number of files to be extracted
+                total_files = len(zip_ref.namelist())
+                extraction_progress_bar = tqdm(total=total_files, unit='file', desc="Extracting")
+                
+                # extract each file and update the extraction progress
+                for member in zip_ref.namelist():
+                    zip_ref.extract(member, path=env_dir)
+                    extraction_progress_bar.update(1)
+                    extraction_progress_percentage = extraction_progress_bar.n / total_files
+                    download_popup.update_extraction_progress(extraction_progress_percentage)
+                extraction_progress_bar.close()
+            download_popup.close()
+            print(f"Extraction successful. Files extracted to: {env_dir}")
+            
+            # Remove the zip file after extraction
+            try:
+                os.remove(file_path)
+                print(f"Removed the zip file: {file_path}")
+            except Exception as e:
+                print(f"Error removing file: {e}")
+
+        # return succes
+        return True
+
+    # catch errors
+    except Exception as error:
+        print("ERROR:\n" + str(error) + "\n\nDETAILS:\n" + str(traceback.format_exc()) + "\n\n")
+        try:
+            # remove incomplete archive
+            if os.path.isfile(file_path): 
+                os.remove(file_path)
+                
+            # remove incomplete extracted dir
+            extracted_dir = os.path.join(env_dir, f"env-{env_name}")
+            if os.path.isdir(extracted_dir): 
+                shutil.rmtree(extracted_dir)
+
+            # close popup
+            download_popup.close()
+                
+        except UnboundLocalError:
+            # file_path is not set, meaning there is no incomplete download
+            pass
+
+        # show internet options
+        show_download_error_window_env(env_name, env_dir, model_vars)
+
 
 ##############################################
 ############# FRONTEND FUNCTIONS #############
@@ -5368,6 +6290,57 @@ def show_download_error_window(model_title, model_dir, model_vars):
         close_btn = customtkinter.CTkButton(btns_frm2, text=["Close AddaxAI", "Cerrar AddaxAI"][lang_idx], command=on_toplevel_close)
         close_btn.grid(row=0, column=0, padx=PADX, pady=PADY, sticky="nswe")
 
+# open window with env info
+def show_download_error_window_env(model_title, model_dir, model_vars):
+    
+    # create window
+    de_root = customtkinter.CTkToplevel(root)
+    de_root.title(["Download error", "Error de descarga"][lang_idx])
+    de_root.geometry("+10+10")
+    bring_window_to_top_but_not_for_ever(de_root)
+
+    # main label
+    lbl2 = customtkinter.CTkLabel(de_root, text=f"{model_title.capitalize()} download error", font = main_label_font)
+    lbl2.grid(row=0, column=0, padx=PADX, pady=(PADY, 0), columnspan = 2, sticky="nswe")
+    lbl2 = customtkinter.CTkLabel(de_root, text=["Something went wrong while trying to download the virtual environment. This can have "
+                                                 "several causes.", "Algo salió mal al intentar descargar el modelo. Esto "
+                                                 "puede tener varias causas."][lang_idx])
+    lbl2.grid(row=1, column=0, padx=PADX, pady=(0, PADY/2), columnspan = 2, sticky="nswe")
+
+    # internet connection frame
+    int_frm_1 = customtkinter.CTkFrame(master=de_root)
+    int_frm_1.grid(row=2, column=0, padx=PADX, pady=(0, PADY), sticky="nswe")
+    int_frm_1.columnconfigure(0, weight=1, minsize=700)
+    int_frm_2 = customtkinter.CTkFrame(master=int_frm_1)
+    int_frm_2.grid(row=2, column=0, padx=PADX, pady=(0, PADY), sticky="nswe")
+    int_frm_2.columnconfigure(0, weight=1, minsize=700)
+    int_lbl = customtkinter.CTkLabel(int_frm_1, text=[" 1. Internet connection", " 1. Conexión a Internet"][lang_idx], font = main_label_font)
+    int_lbl.grid(row=0, column=0, padx=PADX, pady=(PADY, PADY/2), sticky="nsw")
+    int_txt_1 = customtkinter.CTkTextbox(master=int_frm_2, corner_radius=10, height = 55, wrap = "word", fg_color = "transparent")
+    int_txt_1.grid(row=0, column=0, padx=PADX/4, pady=(0, PADY/4), sticky="nswe")
+    int_txt_1.insert(END, ["Check if you have a stable internet connection. If possible, try again on a fibre internet "
+                           "connection, or perhaps on a different, stronger, Wi-Fi network. Sometimes connecting to an "
+                           "open network such as a mobile hotspot can do the trick.", "Comprueba si tienes una conexión "
+                           "a Internet estable. Si es posible, inténtalo de nuevo con una conexión de fibra o quizás con "
+                           "otra red Wi-Fi más potente. A veces, conectarse a una red abierta, como un hotspot móvil, "
+                           "puede funcionar."][lang_idx])
+
+    # protection software frame
+    pro_frm_1 = customtkinter.CTkFrame(master=de_root)
+    pro_frm_1.grid(row=3, column=0, padx=PADX, pady=(0, PADY), sticky="nswe")
+    pro_frm_1.columnconfigure(0, weight=1, minsize=700)
+    pro_frm_2 = customtkinter.CTkFrame(master=pro_frm_1)
+    pro_frm_2.grid(row=2, column=0, padx=PADX, pady=(0, PADY), sticky="nswe")
+    pro_frm_2.columnconfigure(0, weight=1, minsize=700)
+    pro_lbl = customtkinter.CTkLabel(pro_frm_1, text=[" 2. Protection software", " 2. Software de protección"][lang_idx], font = main_label_font)
+    pro_lbl.grid(row=0, column=0, padx=PADX, pady=(PADY, PADY/2), sticky="nsw")
+    pro_txt_1 = customtkinter.CTkTextbox(master=pro_frm_2, corner_radius=10, height = 55, wrap = "word", fg_color = "transparent")
+    pro_txt_1.grid(row=0, column=0, padx=PADX/4, pady=(0, PADY/4), sticky="nswe")
+    pro_txt_1.insert(END, ["Some firewall, proxy or VPN settings might block the internet connection. Try again with this "
+                           "protection software disabled.", "Algunas configuraciones de cortafuegos, proxy o VPN podrían "
+                           "bloquear la conexión a Internet. Inténtalo de nuevo con este software de protección "
+                           "desactivado."][lang_idx])
+
 # open frame to select species for advanc mode
 def open_species_selection():
 
@@ -5523,7 +6496,80 @@ class SpeciesSelectionFrame(customtkinter.CTkScrollableFrame):
 def open_nosleep_page():
     webbrowser.open("https://nosleep.page")
 
-# show download progress
+# show download and extract progress for environments
+class EnvDownloadProgressWindow:
+    def __init__(self, env_title, total_size_str):
+        self.dm_root = customtkinter.CTkToplevel(root)
+        self.dm_root.title("Download progress")
+        self.dm_root.geometry("+10+10")
+        self.frm = customtkinter.CTkFrame(master=self.dm_root)
+        self.frm.grid(row=3, column=0, padx=PADX, pady=(PADY, PADY/2), sticky="nswe")
+        self.frm.columnconfigure(0, weight=1, minsize=500 * scale_factor)
+        
+        self.lbl = customtkinter.CTkLabel(self.dm_root, text=[f"Downloading environment '{env_title}' ({total_size_str})",
+                                                              f"Descargar entorno '{env_title}' ({total_size_str})"][lang_idx], 
+                                          font = customtkinter.CTkFont(family='CTkFont', size=14, weight = 'bold'))
+        self.lbl.grid(row=0, column=0, padx=PADX, pady=(0, 0), sticky="nsew")
+        
+        self.war = customtkinter.CTkLabel(self.dm_root, text=["Please prevent computer from sleeping during the download.",
+                                                              "Por favor, evite que el ordenador se duerma durante la descarga."][lang_idx])
+        self.war.grid(row=1, column=0, padx=PADX, pady=0, sticky="nswe")
+        
+        self.but = CancelButton(self.dm_root, text=["  Prevent sleep with online tool ", "  Usar prevención de sueño en línea  "][lang_idx], command=open_nosleep_page)
+        self.but.grid(row=2, column=0, padx=PADX, pady=(PADY/2, 0), sticky="")
+        
+        # Label for Downloading Progress
+        self.lbl_download = customtkinter.CTkLabel(self.frm, text=["Downloading...", "Descargando..."][lang_idx])
+        self.lbl_download.grid(row=1, column=0, padx=PADX, pady=(0, 0), sticky="nsew")
+
+        # Progress bar for downloading
+        self.pbr_download = customtkinter.CTkProgressBar(self.frm, orientation="horizontal", height=22, corner_radius=5, width=1)
+        self.pbr_download.set(0)
+        self.pbr_download.grid(row=2, column=0, padx=PADX, pady=PADY, sticky="nsew")
+
+        self.per_download = customtkinter.CTkLabel(self.frm, text=f" 0% ", height=5, fg_color=("#949BA2", "#4B4D50"), text_color="white")
+        self.per_download.grid(row=2, column=0, padx=PADX, pady=PADY, sticky="")
+
+        # Label for Extraction Progress
+        self.lbl_extraction = customtkinter.CTkLabel(self.frm, text=["Extracting...", "Extrayendo..."][lang_idx])
+        self.lbl_extraction.grid(row=3, column=0, padx=PADX, pady=(0, 0), sticky="nsew")
+
+        # Progress bar for extraction
+        self.pbr_extraction = customtkinter.CTkProgressBar(self.frm, orientation="horizontal", height=22, corner_radius=5, width=1)
+        self.pbr_extraction.set(0)
+        self.pbr_extraction.grid(row=4, column=0, padx=PADX, pady=PADY, sticky="nsew")
+
+        self.per_extraction = customtkinter.CTkLabel(self.frm, text=f" 0% ", height=5, fg_color=("#949BA2", "#4B4D50"), text_color="white")
+        self.per_extraction.grid(row=4, column=0, padx=PADX, pady=PADY, sticky="")
+
+        self.dm_root.withdraw()
+
+    def open(self):
+        self.dm_root.update()
+        self.dm_root.deiconify()
+
+    def update_download_progress(self, percentage):
+        self.pbr_download.set(percentage)
+        self.per_download.configure(text=f" {round(percentage * 100)}% ")
+        if percentage > 0.5:
+            self.per_download.configure(fg_color=(green_primary, "#1F6BA5"))
+        else:
+            self.per_download.configure(fg_color=("#949BA2", "#4B4D50"))
+        self.dm_root.update()
+
+    def update_extraction_progress(self, percentage):
+        self.pbr_extraction.set(percentage)
+        self.per_extraction.configure(text=f" {round(percentage * 100)}% ")
+        if percentage > 0.5:
+            self.per_extraction.configure(fg_color=(green_primary, "#1F6BA5"))
+        else:
+            self.per_extraction.configure(fg_color=("#949BA2", "#4B4D50"))
+        self.dm_root.update()
+
+    def close(self):
+        self.dm_root.destroy()
+
+# show download progress for model files
 class ModelDownloadProgressWindow:
     def __init__(self, model_title, total_size_str):
         self.dm_root = customtkinter.CTkToplevel(root)
@@ -5541,7 +6587,7 @@ class ModelDownloadProgressWindow:
         self.war.grid(row=1, column=0, padx=PADX, pady=0, sticky="nswe")
         self.but = CancelButton(self.dm_root, text=["  Prevent sleep with online tool ", "  Usar prevención de sueño en línea  "][lang_idx], command=open_nosleep_page)
         self.but.grid(row=2, column=0, padx=PADX, pady=(PADY/2, 0), sticky="")
-        self.pbr = customtkinter.CTkProgressBar(self.frm, orientation="horizontal", height=28, corner_radius=5, width=1)
+        self.pbr = customtkinter.CTkProgressBar(self.frm, orientation="horizontal", height=22, corner_radius=5, width=1)
         self.pbr.set(0)
         self.pbr.grid(row=1, column=0, padx=PADX, pady=PADY, sticky="nsew")
         self.per = customtkinter.CTkLabel(self.frm, text=f" 0% ", height=5, fg_color=("#949BA2", "#4B4D50"), text_color="white")
@@ -5684,9 +6730,9 @@ def show_model_info(title = None, model_dict = None, new_model = False):
     liscense_present = False if license == "" else True
     needs_EA_update_bool = needs_EA_update(min_version)
     if needs_EA_update_bool:
-        update_var = f"Your current AddaxAI version (v{current_EA_version}) will not be able to run this model. An update is required."
+        update_var = f"Your current AddaxAI version (v{current_AA_version}) will not be able to run this model. An update is required."
     else:
-        update_var = f"Current version of AddaxAI (v{current_EA_version}) is able to use this model. No update required."
+        update_var = f"Current version of AddaxAI (v{current_AA_version}) is able to use this model. No update required."
     
     # define functions
     def close():
@@ -7572,8 +8618,8 @@ def reset_values():
         # set model specific thresholds
         var_cls_detec_thresh.set(model_vars["var_cls_detec_thresh_default"])
         var_cls_class_thresh.set(model_vars["var_cls_class_thresh_default"])
-        write_model_vars(new_values = {"var_cls_detec_thresh": var_cls_detec_thresh.get(),
-                                    "var_cls_class_thresh": var_cls_class_thresh.get()})
+        write_model_vars(new_values = {"var_cls_detec_thresh": str(var_cls_detec_thresh.get()),
+                                    "var_cls_class_thresh": str(var_cls_class_thresh.get())})
 
     # update window
     toggle_cls_frame()
@@ -7691,7 +8737,7 @@ customtkinter.set_default_color_theme(os.path.join(AddaxAI_files, "AddaxAI", "th
 
 # ADVANCED MODE WINDOW 
 advanc_mode_win = customtkinter.CTkToplevel(root)
-advanc_mode_win.title(f"AddaxAI v{current_EA_version} - Advanced mode")
+advanc_mode_win.title(f"AddaxAI v{current_AA_version} - Advanced mode")
 advanc_mode_win.geometry("+20+20")
 advanc_mode_win.protocol("WM_DELETE_WINDOW", on_toplevel_close)
 advanc_bg_image = customtkinter.CTkImage(PIL_sidebar, size=(ADV_WINDOW_WIDTH, 10))
@@ -7883,7 +8929,7 @@ var_cls_detec_thresh = DoubleVar()
 var_cls_detec_thresh.set(model_vars.get('var_cls_detec_thresh', 0.6))
 scl_cls_detec_thresh = Scale(cls_frame, from_=0.01, to=1, resolution=0.01, orient=HORIZONTAL,
                              variable=var_cls_detec_thresh, showvalue=0, width=10, length=1, state=DISABLED,
-                             command=lambda value: write_model_vars(new_values = {"var_cls_detec_thresh": value}))
+                             command=lambda value: write_model_vars(new_values = {"var_cls_detec_thresh": str(value)}))
 scl_cls_detec_thresh.grid(row=row_cls_detec_thresh, column=1, sticky='ew', padx=10)
 dsp_cls_detec_thresh = Label(cls_frame, textvariable=var_cls_detec_thresh)
 dsp_cls_detec_thresh.grid(row=row_cls_detec_thresh, column=0, sticky='e', padx=0)
@@ -7913,6 +8959,17 @@ var_smooth_cls_animal = BooleanVar()
 var_smooth_cls_animal.set(model_vars.get('var_smooth_cls_animal', False))
 chb_smooth_cls_animal = Checkbutton(cls_frame, variable=var_smooth_cls_animal, anchor="w", command = on_chb_smooth_cls_animal_change)
 chb_smooth_cls_animal.grid(row=row_smooth_cls_animal, column=1, sticky='nesw', padx=5)
+
+# choose location for species net
+lbl_sppnet_location_txt = ["Location", "Ubicación"]
+row_sppnet_location = 1
+lbl_sppnet_location = Label(master=cls_frame, text="     " + lbl_sppnet_location_txt[lang_idx], width=1, anchor="w")
+lbl_sppnet_location.grid(row=row_sppnet_location, sticky='nesw', pady=2)
+var_sppnet_location = StringVar(cls_frame)
+var_sppnet_location.set(dpd_options_sppnet_location[lang_idx][global_vars["var_sppnet_location_idx"]]) # take idx instead of string
+dpd_sppnet_location = OptionMenu(cls_frame, var_sppnet_location, *dpd_options_sppnet_location[lang_idx])
+dpd_sppnet_location.configure(width=1, state=DISABLED)
+# dpd_sppnet_location.grid(row=row_sppnet_location, column=1, sticky='nesw', padx=5, pady=2) # dont grid this by default
 
 # include subdirectories
 lbl_exclude_subs_txt = ["Don't process subdirectories", "No procesar subcarpetas"]
@@ -8729,7 +9786,7 @@ customtkinter.set_default_color_theme(os.path.join(AddaxAI_files, "AddaxAI", "th
 
 # set up window
 simple_mode_win = customtkinter.CTkToplevel(root)
-simple_mode_win.title(f"AddaxAI v{current_EA_version} - Simple mode")
+simple_mode_win.title(f"AddaxAI v{current_AA_version} - Simple mode")
 simple_mode_win.geometry("+20+20")
 simple_mode_win.protocol("WM_DELETE_WINDOW", on_toplevel_close)
 simple_mode_win.columnconfigure(0, weight=1, minsize=500)
