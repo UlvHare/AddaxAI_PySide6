@@ -3,7 +3,7 @@
 # GUI to simplify camera trap image analysis with species recognition models
 # https://addaxdatascience.com/addaxai/
 # Created by Peter van Lunteren
-# Latest edit by Peter van Lunteren on 1 Apr 2025
+# Latest edit by Peter van Lunteren on 2 Apr 2025
 
 # TODO: DEPTH - add depth estimation model: https://pytorch.org/hub/intelisl_midas_v2/
 # TODO: CLEAN - if the processing is done, and a image is deleted before the post processing, it crashes and just stops, i think it should just skip the file and then do the rest. I had to manually delete certain entries from the image_recognition_file.json to make it work
@@ -59,6 +59,7 @@ import re
 import io
 import sys
 import cv2
+import csv
 import json
 import math
 import time
@@ -68,6 +69,7 @@ import signal
 import shutil
 import pickle
 import folium
+import hashlib 
 import argparse
 import calendar
 import platform
@@ -677,7 +679,51 @@ def postprocess(src_dir, dst_dir, thresh, sep, file_placement, sep_conf, vis, cr
                     df['DateTime'] = pd.to_datetime(df['DateTime'], format='%d/%m/%y %H:%M:%S')
                     df['DateTimeDigitized'] = pd.to_datetime(df['DateTimeDigitized'], format='%d/%m/%y %H:%M:%S')
                 df.to_excel(writer, sheet_name=result_type, index=None, header=True)
-    
+
+    # convert csv to tsv if required
+    if exp and exp_format == dpd_options_exp_format[lang_idx][3]: # if exp_format is the third option in the dropdown menu -> TSV
+
+        # Check if the TSV file exists, e.g., when processing both img and vid
+        csv_path = os.path.join(dst_dir, f"results_detections.csv")
+        tsv_path = os.path.join(dst_dir, f"results_sensing_clues.tsv")
+
+        if os.path.isfile(tsv_path):  # Append if TSV exists
+            with open(csv_path, 'r', newline='') as csv_file, open(tsv_path, 'a', newline='') as tsv_file:
+                csv_reader = csv.reader(x.replace('\0', '') for x in csv_file)
+                tsv_writer = csv.writer(tsv_file, delimiter='\t')
+
+                csv_header = next(csv_reader)
+                idx_date, idx_lat, idx_lon = map(csv_header.index, ["DateTimeOriginal", "Latitude", "Longitude"])
+
+                for row in csv_reader:
+                    unique_id = generate_unique_id(row)
+                    formatted_date = format_datetime(row[idx_date])
+                    new_row = [unique_id, formatted_date, row[idx_lat], row[idx_lon], "AddaxAI"] + row
+                    tsv_writer.writerow(new_row)
+
+        else:  # Create new TSV file
+            with open(csv_path, 'r', newline='') as csv_file, open(tsv_path, 'w', newline='') as tsv_file:
+                csv_reader = csv.reader(x.replace('\0', '') for x in csv_file)
+                tsv_writer = csv.writer(tsv_file, delimiter='\t')
+
+                csv_header = next(csv_reader)
+                idx_date, idx_lat, idx_lon = map(csv_header.index, ["DateTimeOriginal", "Latitude", "Longitude"])
+
+                tsv_writer.writerow(["ID", "Date", "Lat", "Long", "Method"] + csv_header)
+
+                for row in csv_reader:
+                    unique_id = generate_unique_id(row)
+                    formatted_date = format_datetime(row[idx_date])
+                    new_row = [unique_id, formatted_date, row[idx_lat], row[idx_lon], "AddaxAI"] + row
+                    tsv_writer.writerow(new_row)
+
+        # plt needs the CSVs, so don't remove just yet
+        if not plt:
+            for result_type in ['detections', 'files', 'summary']:
+                csv_path = os.path.join(dst_dir, f"results_{result_type}.csv")
+                if os.path.isfile(csv_path):
+                    os.remove(csv_path)
+
     # convert csv to coco format if required
     if exp and exp_format == dpd_options_exp_format[lang_idx][2]: # COCO
         
@@ -699,7 +745,7 @@ def postprocess(src_dir, dst_dir, thresh, sep, file_placement, sep_conf, vis, cr
                 csv_path = os.path.join(dst_dir, f"results_{result_type}.csv")
                 if os.path.isfile(csv_path):
                     os.remove(csv_path)
-    
+
     # change json paths back, if converted earlier
     if json_paths_converted:
         make_json_absolute(recognition_file)
@@ -712,15 +758,32 @@ def postprocess(src_dir, dst_dir, thresh, sep, file_placement, sep_conf, vis, cr
     if plt:
         produce_plots(dst_dir)
 
-        # if user wants XLSX or COCO as output, or if user didn't specify exp all-
+        # if user wants XLSX (0), COCO (2), or TSV (3) as output, or if user didn't specify exp all-
         # together but the files were created for plt -> remove CSV files
         if (exp and exp_format == dpd_options_exp_format[lang_idx][0]) or \
             (exp and exp_format == dpd_options_exp_format[lang_idx][2]) or \
+            (exp and exp_format == dpd_options_exp_format[lang_idx][3]) or \
             remove_csv:
             for result_type in ['detections', 'files', 'summary']:
                 csv_path = os.path.join(dst_dir, f"results_{result_type}.csv")
                 if os.path.isfile(csv_path):
                     os.remove(csv_path)
+
+def clean_line(line):
+    return line.replace('\0', '')
+
+def generate_unique_id(row):
+    """Generate a unique hash for a row based on its contents."""
+    row_str = "".join(row).encode('utf-8')
+    return hashlib.md5(row_str).hexdigest()
+
+def format_datetime(date_str):
+    """Convert 'DD/MM/YY HH:MM:SS' to 'YYYY-MM-DDTHH:MM:SS', handle 'NA' gracefully."""
+    try:
+        dt = datetime.datetime.strptime(date_str, "%d/%m/%y %H:%M:%S")
+        return dt.strftime("%Y-%m-%dT%H:%M:%S")
+    except ValueError:
+        return 'NA'
 
 # convert csv to coco format
 def csv_to_coco(detections_df, files_df, output_path):
@@ -9312,7 +9375,7 @@ lbl_exp_format_txt = ["Output file format", "Formato del archivo de salida"]
 row_exp_format = 0
 lbl_exp_format = Label(exp_frame, text="     " + lbl_exp_format_txt[lang_idx], pady=2, width=1, anchor="w")
 lbl_exp_format.grid(row=row_exp_format, sticky='nesw')
-dpd_options_exp_format = [["XLSX", "CSV", "COCO"], ["XLSX", "CSV", "COCO"]]
+dpd_options_exp_format = [["XLSX", "CSV", "COCO", "Sensing Clues (TSV)"], ["XLSX", "CSV", "COCO", "Sensing Clues (TSV)"]]
 var_exp_format = StringVar(exp_frame)
 var_exp_format.set(dpd_options_exp_format[lang_idx][global_vars['var_exp_format_idx']])
 dpd_exp_format = OptionMenu(exp_frame, var_exp_format, *dpd_options_exp_format[lang_idx])
