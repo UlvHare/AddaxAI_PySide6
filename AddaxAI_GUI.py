@@ -5084,10 +5084,10 @@ def convert_bbox_pascal_to_yolo(size, box):
 def sim_mdl_dpd_callback(self):
     
     # this means the user chose SpeciesNet in simple mode, so tell user to use the advanced mode
-    if self == "SpeciesNet":
+    if self == "Global - SpeciesNet - Google":
         mb.showerror(["SpeciesNet not available", "SpeciesNet no disponible"][lang_idx],
-                        message=[f"SpeciesNet is not available in simple mode. Please switch to advanced mode to use SpeciesNet.",
-                                    f"SpeciesNet no está disponible en modo simple. Cambie al modo avanzado para usar SpeciesNet."][lang_idx])
+                        message=[f"'Global - SpeciesNet - Google' is not available in simple mode. Please switch to advanced mode to use SpeciesNet.",
+                                    f"'Global - SpeciesNet - Google' no está disponible en modo simple. Cambie al modo avanzado para usar SpeciesNet."][lang_idx])
     
     var_cls_model.set(dpd_options_cls_model[lang_idx][sim_dpd_options_cls_model[lang_idx].index(self)])
     model_cls_animal_options(var_cls_model.get())
