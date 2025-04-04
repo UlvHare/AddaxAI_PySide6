@@ -5,54 +5,6 @@
 # Created by Peter van Lunteren
 # Latest edit by Peter van Lunteren on 2 Apr 2025
 
-# TODO: DEPTH - add depth estimation model: https://pytorch.org/hub/intelisl_midas_v2/
-# TODO: CLEAN - if the processing is done, and a image is deleted before the post processing, it crashes and just stops, i think it should just skip the file and then do the rest. I had to manually delete certain entries from the image_recognition_file.json to make it work
-# TODO: RESUME DOWNLOAD - make some sort of mechanism that either continues the model download when interrupted, or downloads it to /temp/ folder and only moves it to the correct location after succesful download. Otherwise delete from /temp/. That makes sure that users will not be able to continue with half downloaded models. 
-# TODO: BUG - when moving files during postprocessing and exporting xlsx on Windows, it errors with an "file is in use". There must be something going on with opening files... does not happen when copying files or on Mac. 
-# TODO: PYINSTALLER - Get rid of the PyInstaller apps. Then there wont be the weird histation when opning. While you're at it, remove version number in the execution files. Then you can use the same shortcuts. 
-# TODO: WIDGET - make a slider widget for the line width of the bounding box. 
-# TODO: Microsoft Amazon is not working on MacOS, and Iran is not working on Windows. 
-# TODO: MERGE JSON - for timelapse it is already merged. Would be great to merge the image and video jsons together for AddaxAI too, and process videos and jsons together. See merge_jsons() function.
-# TODO: LAT LON 0 0 - filter out the 0,0 coords for map creation
-# TODO: JSON - remove the original json if not running AddaxAI in Timelapse mode. No need to keep that anymore. 
-# TODO: JSON - remove the part where MD stores its typical threshold values etc in the AddaxAI altered json. It doesn't make sense anymore if the detection caterogies are changed. 
-# TODO: VIDEO - create video tutorials of all the steps (simple mode, advanced mode, annotation, postprocessing, etc.)
-# TODO: EMPTIES - add a checkbox for folder separation where you can skip the empties from being copied
-# TODO: LOG SEQUENCE INFO - add sequence information to JSON, CSV, and XSLX 
-# TODO: SEQ SEP - add feature to separate images into sequence subdirs. Something like "treat sequence as detection" or "Include all images in the sequence" while doing the separation step.
-# TODO: INFO - add a messagebox when the deployment is done via advanced mode. Now it just says there were errors. Perhaps just one messagebox with extra text if there are errors or warnings. And some counts. 
-# TODO: JSON - keep track of confidences for each detection and classification in the JSON. And put that in CSV/XSLX, and visualise it in the images.
-# TODO: CSV/XLSX - add frame number and frama rate to the CSV and XLSX files
-# TODO: VIS VIDEO - add option to visualise frame with highest confidence
-# TODO: N_CORES - add UI "--ncores” option - see email Dan "mambaforge vs. miniforge"
-# TODO: REPORTS - add postprocessing reports - see email Dan "mambaforge vs. miniforge"
-# TODO: MINOR - By the way, in the AddaxAI UI, I think the frame extraction status popup uses the same wording as the detection popup. They both say something about "frame X of Y". I think for the frame extraction, it should be "video X of Y".
-# TODO: JSON - keep track of the original confidence scores whenever it changes (from detection to classification, after human verification, etc.)
-# TODO: SMALL FIXES - see list from Saul ('RE: tentative agenda / discussion points') - 12 July 01:11. 
-# TODO: ANNOTATION - improve annotation experience
-    # - make one progress windows in stead of all separate pbars when using large jsons
-    # - I've converted pyqt5 to pyside6 for apple silicon so we don't need to install it via homebrew
-    #         the unix install clones a pyside6 branch of my human-in-the-loop fork. Test windows on this
-    #         on this version too and make it the default
-    # - implement image progress status into main labelimg window, so you don't have two separate windows
-    # - apparently you still get images in which a class is found under the annotation threshold,
-    #         it should count only the images that have classes above the set annotation threshold,
-    #         at this point it only checks whether it should draw an bbox or not, but still shows the image
-    # - Add custom shortcuts. See email Grant ('Possible software feature'). 
-    # - Add option to order chronological See email Grant ('A few questions I've come up with').
-    # - If you press the '?' button in the selection window, it doesn't scroll all the way down anymore. So
-    #         adjust the scroll region, of make an option to close the help text
-    # - shift forcus on first label. See email Grant ('Another small request').
-    # - get rid of the default label pane in the top right. Or at least make it less prominent. 
-    # - remove the X cross to remove the box label pane. No need to have an option to remove it. It's difficult to get it back on macOS. 
-    # - see if you can add the conf of the bbox in the box label pane too. just for clarification purposes for threshhold settings (see email Grant "Showing confidence level")
-    # - there should be a setting that shows box labels inside the image. turn this on by default.
-    # - remove the messagebox that warns you that you're not completely done with the human verification before postprocess. just do it.
-    # - why do I ask if the user is done after verification anyway? why not just take the results as they are and accept it? 
-    # - take the annotation confidence ranges the same as the image confidence ranges if the user specified them. Otherwise use 0.6-1.0.
-    # - When I zoom in, I always zoom in on the center, and then I can’t manage to move the image.
-    # - I figured out when the label becomes greyed out. For me, it happens when I draw a bounding box myself, and then when I go to the next image, "edit label" is greyed out. If I then close the annotation (but not the entire app) and continue, it works again.
-
 #import packages like a very pointy half christmas tree
 import os
 import re
@@ -69,7 +21,7 @@ import signal
 import shutil
 import pickle
 import folium
-import hashlib 
+import hashlib
 import argparse
 import calendar
 import platform
@@ -176,7 +128,7 @@ if platform.system() == "Windows":
     import ctypes
     try:
         # attempt
-        ctypes.windll.shcore.SetProcessDpiAwareness(2) 
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
         scale_factor = ctypes.windll.shcore.GetScaleFactorForDevice(0) / 100
     except AttributeError:
         # fallback for older versions of Windows
@@ -230,7 +182,7 @@ def postprocess(src_dir, dst_dir, thresh, sep, file_placement, sep_conf, vis, cr
     remove_csv = False
     if plt and not exp:
         # except if the csv are already created ofcourse
-        if not (os.path.isfile(os.path.join(dst_dir, "results_detections.csv")) and 
+        if not (os.path.isfile(os.path.join(dst_dir, "results_detections.csv")) and
                 os.path.isfile(os.path.join(dst_dir, "results_files.csv"))):
             exp = True
             exp_format = dpd_options_exp_format[lang_idx][1] # CSV
@@ -270,16 +222,16 @@ def postprocess(src_dir, dst_dir, thresh, sep, file_placement, sep_conf, vis, cr
     if vis:
         colors = ["fuchsia", "blue", "orange", "yellow", "green", "red", "aqua", "navy", "teal", "olive", "lime", "maroon", "purple"]
         colors = colors * 30
-    
+
     # make sure json has relative paths
     json_paths_converted = False
     if check_json_paths(recognition_file) != "relative":
         make_json_relative(recognition_file)
         json_paths_converted = True
-    
+
     # set cancel bool
     cancel_var = False
-    
+
     # open json file
     with open(recognition_file) as image_recognition_file_content:
         data = json.load(image_recognition_file_content)
@@ -299,7 +251,7 @@ def postprocess(src_dir, dst_dir, thresh, sep, file_placement, sep_conf, vis, cr
                                                'ISOSpeedRatings', 'ExifImageHeight', 'ExposureMode', 'WhiteBalance', 'SceneCaptureType',
                                                'ExposureTime', 'Software', 'Sharpness', 'Saturation', 'ReferenceBlackWhite'])
             df.to_csv(csv_for_files, encoding='utf-8', index=False)
-        
+
         # for detections
         csv_for_detections = os.path.join(dst_dir, "results_detections.csv")
         if not os.path.isfile(csv_for_detections):
@@ -330,7 +282,7 @@ def postprocess(src_dir, dst_dir, thresh, sep, file_placement, sep_conf, vis, cr
                          ["The XLSX file you are trying to create is too large!\n\nThe maximum number of rows in an XSLX file is "
                           f"1048576, while you are trying to create a sheet with {max(n_rows_files, n_rows_detections)} rows.\n\nIf"
                           " you require the results in XLSX format, please run the process on smaller chunks so that it doesn't "
-                          f"exceed Microsoft's row limit. Or choose CSV as {lbl_exp_format_txt[lang_idx]} in advanced mode.", 
+                          f"exceed Microsoft's row limit. Or choose CSV as {lbl_exp_format_txt[lang_idx]} in advanced mode.",
                           "¡El archivo XLSX que está intentando crear es demasiado grande!\n\nEl número máximo de filas en un archivo"
                           f" XSLX es 1048576, mientras que usted está intentando crear una hoja con {max(n_rows_files, n_rows_detections)}"
                           " filas.\n\nSi necesita los resultados en formato XLSX, ejecute el proceso en trozos más pequeños para que no "
@@ -343,10 +295,10 @@ def postprocess(src_dir, dst_dir, thresh, sep, file_placement, sep_conf, vis, cr
         # cancel process if required
         if cancel_var:
             break
-        
+
         # check for failure
         if "failure" in image:
-            
+
             # write warnings to log file
             with open(postprocessing_error_log, 'a+') as f:
                 f.write(f"File '{image['file']}' was skipped by post processing features because '{image['failure']}'\n")
@@ -368,7 +320,7 @@ def postprocess(src_dir, dst_dir, thresh, sep, file_placement, sep_conf, vis, cr
 
             # skip this iteration
             continue
-        
+
         # get image info
         file = image['file']
         detections_list = image['detections']
@@ -409,7 +361,7 @@ def postprocess(src_dir, dst_dir, thresh, sep, file_placement, sep_conf, vis, cr
                     continue
 
                 im_to_crop_path = os.path.join(src_dir, file)
-                
+
                 # load old image and extract EXIF
                 origImage = Image.open(os.path.join(src_dir, file))
                 try:
@@ -463,9 +415,9 @@ def postprocess(src_dir, dst_dir, thresh, sep, file_placement, sep_conf, vis, cr
                     gpsinfo = {'Latitude': None,
                                'Longitude': None,
                                'GPSLink': None}
-                
+
                 # combine metadata and gps data
-                exif_data = {**metadata, **gpsinfo} 
+                exif_data = {**metadata, **gpsinfo}
 
                 # check if datetime values can be found
                 exif_params = []
@@ -530,7 +482,7 @@ def postprocess(src_dir, dst_dir, thresh, sep, file_placement, sep_conf, vis, cr
 
                         # store in list
                         bbox_info.append([label, conf, manually_checked, left, top, right, bottom, height, width, xo, yo, w_box, h_box])
-        
+
         # collect info to append to csv files
         if exp:
 
@@ -556,7 +508,7 @@ def postprocess(src_dir, dst_dir, thresh, sep, file_placement, sep_conf, vis, cr
                 rows.append(row)
             rows = pd.DataFrame(rows)
             rows.to_csv(csv_for_detections, encoding='utf-8', mode='a', index=False, header=False)
-    
+
         # separate files
         if sep:
             if n_detections == 0:
@@ -569,16 +521,16 @@ def postprocess(src_dir, dst_dir, thresh, sep, file_placement, sep_conf, vis, cr
                     file = move_files(file, "empty", file_placement, max_detection_conf, sep_conf, dst_dir, src_dir, manually_checked)
                 else:
                     file = move_files(file, label, file_placement, max_detection_conf, sep_conf, dst_dir, src_dir, manually_checked)
-    
+
         # visualize images
         if vis and len(bbox_info) > 0:
-            
+
             # blur people
             if var_vis_blur.get():
                 for bbox in bbox_info:
                     if bbox[0] == "person":
                         im_to_vis = blur_box(im_to_vis, *bbox[3:7], bbox[8], bbox[7])
-                        
+
             # draw bounding boxes
             if var_vis_bbox.get():
                 for bbox in bbox_info:
@@ -589,7 +541,7 @@ def postprocess(src_dir, dst_dir, thresh, sep, file_placement, sep_conf, vis, cr
                         vis_label = f"{bbox[0]} {conf_label}"
                     color = colors[int(inverted_label_map[bbox[0]])]
                     bb.add(im_to_vis, *bbox[3:7], vis_label, color, size = dpd_options_vis_size[lang_idx].index(var_vis_size.get())) # convert string to index, e.g. "small" -> 0
-            
+
             im = os.path.join(dst_dir, file)
             Path(os.path.dirname(im)).mkdir(parents=True, exist_ok=True)
             cv2.imwrite(im, im_to_vis)
@@ -599,7 +551,7 @@ def postprocess(src_dir, dst_dir, thresh, sep, file_placement, sep_conf, vis, cr
                 image_new = Image.open(im)
                 image_new.save(im, exif=exif)
                 image_new.close()
-        
+
         # crop images
         if crp and len(bbox_info) > 0:
             counter = 1
@@ -607,7 +559,7 @@ def postprocess(src_dir, dst_dir, thresh, sep, file_placement, sep_conf, vis, cr
 
                 # if files have been moved
                 if sep:
-                    im_to_crp = Image.open(os.path.join(dst_dir,file))                    
+                    im_to_crp = Image.open(os.path.join(dst_dir,file))
                 else:
                     im_to_crp = Image.open(im_to_crop_path)
                 crp_im = im_to_crp.crop((bbox[3:7]))
@@ -726,19 +678,19 @@ def postprocess(src_dir, dst_dir, thresh, sep, file_placement, sep_conf, vis, cr
 
     # convert csv to coco format if required
     if exp and exp_format == dpd_options_exp_format[lang_idx][2]: # COCO
-        
+
         # init vars
         coco_path = os.path.join(dst_dir, f"results_coco_{data_type}.json")
         detections_df = pd.read_csv(os.path.join(dst_dir, f"results_detections.csv"), dtype=dtypes, low_memory=False)
         files_df = pd.read_csv(os.path.join(dst_dir, f"results_files.csv"), dtype=dtypes, low_memory=False)
-        
+
         # convert csv to coco format
         csv_to_coco(
             detections_df=detections_df,
             files_df=files_df,
             output_path=coco_path
         )
-        
+
         # only plt needs the csv's, so if the user didn't specify plt, remove csvs
         if not plt:
             for result_type in ['detections', 'files', 'summary']:
@@ -787,10 +739,10 @@ def format_datetime(date_str):
 
 # convert csv to coco format
 def csv_to_coco(detections_df, files_df, output_path):
-    
+
     # log
     print(f"EXECUTED: {sys._getframe().f_code.co_name}\n")
-    
+
     # init coco structure
     coco = {
         "images": [],
@@ -825,16 +777,16 @@ def csv_to_coco(detections_df, files_df, output_path):
     # process each image and its detections
     annotation_id = 1
     for _, file_info in files_df.iterrows():
-        
+
         # create image entry
         image_id = len(coco['images']) + 1
-        
+
         # get date captured
         if type(file_info['DateTimeOriginal']) == float: # means NA value
             date_captured = "NA"
         else:
             date_captured = datetime.datetime.strptime(file_info['DateTimeOriginal'],
-                                                        "%d/%m/%y %H:%M:%S").strftime("%Y-%m-%d %H:%M:%S")   
+                                                        "%d/%m/%y %H:%M:%S").strftime("%Y-%m-%d %H:%M:%S")
 
         # add image to coco
         image_entry = {
@@ -1246,7 +1198,7 @@ def start_postprocess():
         "var_plt": var_plt.get(),
         "var_thresh": var_thresh.get()
     })
-    
+
     # fix user input
     src_dir = var_choose_folder.get()
     dst_dir = var_output_dir.get()
@@ -1276,7 +1228,7 @@ def start_postprocess():
                                        "No hay archivo de salida del modelo. Asegúrese de ejecutar el paso 2 antes de postprocesar"
                                        " los archivos."][lang_idx])
         return
-    
+
     # check if destination dir is valid and set to input dir if not
     if dst_dir in ["", "/", "\\", ".", "~", ":"] or not os.path.isdir(dst_dir):
         mb.showerror(["Destination folder not set", "Carpeta de destino no establecida."][lang_idx],
@@ -1288,16 +1240,16 @@ def start_postprocess():
 
     # warn user if the original files will be overwritten with visualized files
     if os.path.normpath(dst_dir) == os.path.normpath(src_dir) and vis and not sep:
-        if not mb.askyesno(["Original images will be overwritten", "Las imágenes originales se sobrescribirán."][lang_idx], 
+        if not mb.askyesno(["Original images will be overwritten", "Las imágenes originales se sobrescribirán."][lang_idx],
                       [f"WARNING! The visualized images will be placed in the folder with the original data: '{src_dir}'. By doing this, you will overwrite the original images"
                       " with the visualized ones. Visualizing is permanent and cannot be undone. Are you sure you want to continue?",
                       f"ATENCIÓN. Las imágenes visualizadas se colocarán en la carpeta con los datos originales: '{src_dir}'. Al hacer esto, se sobrescribirán las imágenes "
                       "originales con las visualizadas. La visualización es permanente y no se puede deshacer. ¿Está seguro de que desea continuar?"][lang_idx]):
             return
-    
+
     # warn user if images will be moved and visualized
     if sep and file_placement == 1 and vis:
-        if not mb.askyesno(["Original images will be overwritten", "Las imágenes originales se sobrescribirán."][lang_idx], 
+        if not mb.askyesno(["Original images will be overwritten", "Las imágenes originales se sobrescribirán."][lang_idx],
                       [f"WARNING! You specified to visualize the original images. Visualizing is permanent and cannot be undone. If you don't want to visualize the original "
                       f"images, please select 'Copy' as '{lbl_file_placement_txt}'. Are you sure you want to continue with the current settings?",
                       "ATENCIÓN. Ha especificado visualizar las imágenes originales. La visualización es permanente y no puede deshacerse. Si no desea visualizar las "
@@ -1324,12 +1276,12 @@ def start_postprocess():
         # postprocess videos
         if vid_json and not cancel_var:
             postprocess(src_dir, dst_dir, thresh, sep, file_placement, sep_conf, vis, crp, exp, plt, exp_format, data_type = "vid")
-            
+
         # complete
         complete_frame(fth_step)
 
         # check if there are postprocessing errors written
-        if os.path.isfile(postprocessing_error_log): 
+        if os.path.isfile(postprocessing_error_log):
             mb.showwarning(warning_txt[lang_idx], [f"One or more files failed to be analysed by the model (e.g., corrupt files) and will be skipped by "
                                                 f"post-processing features. See\n\n'{postprocessing_error_log}'\n\nfor more info.",
                                                 f"Uno o más archivos no han podido ser analizados por el modelo (por ejemplo, ficheros corruptos) y serán "
@@ -1337,16 +1289,16 @@ def start_postprocess():
 
         # close progress window
         progress_window.close()
-    
+
     except Exception as error:
         # log error
         print("ERROR:\n" + str(error) + "\n\nDETAILS:\n" + str(traceback.format_exc()) + "\n\n")
-        
+
         # show error
         mb.showerror(title=error_txt[lang_idx],
                      message=["An error has occurred", "Ha ocurrido un error"][lang_idx] + " (AddaxAI v" + current_AA_version + "): '" + str(error) + "'.",
                      detail=traceback.format_exc())
-        
+
         # close window
         progress_window.close()
 
@@ -1384,7 +1336,7 @@ def produce_plots(results_dir):
             x_vals = np.arange(len(combined_data))
             tick_step = max(len(combined_data) // max_n_ticks, 1)
             selected_ticks = x_vals[::tick_step]
-            while_iteration = 0 
+            while_iteration = 0
             while len(selected_ticks) >= max_n_ticks:
                 tick_step += 1
                 while_iteration += 1
@@ -1401,10 +1353,10 @@ def produce_plots(results_dir):
 
         def plot_obs_over_time_total_interactive(time_unit):
             combined_data = grouped_data.sum(axis=0).resample(time_format_mapping[time_unit]['freq']).sum()
-            hover_text = [f'Period: {date}<br>Count: {count}<extra></extra>' 
-                        for date, count in zip(combined_data.index.strftime(time_format_mapping[time_unit]['time_format']), 
+            hover_text = [f'Period: {date}<br>Count: {count}<extra></extra>'
+                        for date, count in zip(combined_data.index.strftime(time_format_mapping[time_unit]['time_format']),
                                                 combined_data)]
-            fig = go.Figure(data=[go.Bar(x=combined_data.index.strftime(time_format_mapping[time_unit]['time_format']), 
+            fig = go.Figure(data=[go.Bar(x=combined_data.index.strftime(time_format_mapping[time_unit]['time_format']),
                                         y=combined_data,
                                         hovertext=hover_text,
                                         hoverinfo='text')])
@@ -1432,7 +1384,7 @@ def produce_plots(results_dir):
             x_vals = np.arange(len(grouped_data_indexed))
             tick_step = max(len(grouped_data_indexed) // max_n_ticks, 1)
             selected_ticks = x_vals[::tick_step]
-            while_iteration = 0 
+            while_iteration = 0
             while len(selected_ticks) >= max_n_ticks:
                 tick_step += 1
                 while_iteration += 1
@@ -1451,7 +1403,7 @@ def produce_plots(results_dir):
             fig = go.Figure()
             for label in grouped_data.index:
                 grouped_data_indexed = grouped_data.loc[label].resample(time_format_mapping[time_unit]['freq']).sum()
-                fig.add_trace(go.Scatter(x=grouped_data_indexed.index.strftime(time_format_mapping[time_unit]['time_format']), 
+                fig.add_trace(go.Scatter(x=grouped_data_indexed.index.strftime(time_format_mapping[time_unit]['time_format']),
                                         y=grouped_data_indexed,
                                         mode='lines',
                                         name=label))
@@ -1478,7 +1430,7 @@ def produce_plots(results_dir):
             x_vals = np.arange(len(grouped_data_indexed))
             tick_step = max(len(grouped_data_indexed) // max_n_ticks, 1)
             selected_ticks = x_vals[::tick_step]
-            while_iteration = 0 
+            while_iteration = 0
             while len(selected_ticks) >= max_n_ticks:
                 tick_step += 1
                 while_iteration += 1
@@ -1495,11 +1447,11 @@ def produce_plots(results_dir):
             update_pbar_plt()
 
         def plot_obs_over_time_separate_interactive(label, time_unit):
-            grouped_data_indexed = grouped_data.loc[label].resample(time_format_mapping[time_unit]['freq']).sum()            
-            hover_text = [f'Period: {date}<br>Count: {count}<extra></extra>' 
-                        for date, count in zip(grouped_data_indexed.index.strftime(time_format_mapping[time_unit]['time_format']), 
+            grouped_data_indexed = grouped_data.loc[label].resample(time_format_mapping[time_unit]['freq']).sum()
+            hover_text = [f'Period: {date}<br>Count: {count}<extra></extra>'
+                        for date, count in zip(grouped_data_indexed.index.strftime(time_format_mapping[time_unit]['time_format']),
                                                 grouped_data_indexed)]
-            fig = go.Figure(go.Bar(x=grouped_data_indexed.index.strftime(time_format_mapping[time_unit]['time_format']), 
+            fig = go.Figure(go.Bar(x=grouped_data_indexed.index.strftime(time_format_mapping[time_unit]['time_format']),
                                     y=grouped_data_indexed,
                                     hovertext=hover_text,
                                     hoverinfo='text'))
@@ -1636,7 +1588,7 @@ def produce_plots(results_dir):
 
     # activity plots
     def create_activity_patterns(df, save_path_base, pbar):
-        
+
         # format df
         df['DateTimeOriginal'] = pd.to_datetime(df['DateTimeOriginal'])
         grouped_data = df.groupby(['label', pd.Grouper(key='DateTimeOriginal', freq=f'1D')]).size().unstack(fill_value=0)
@@ -1696,7 +1648,7 @@ def produce_plots(results_dir):
                 df = merged_df
             else:
                 df = df.set_index(unit).reindex(range(n_ticks), fill_value=0).reset_index()
-            total_observations = df['count'].sum()            
+            total_observations = df['count'].sum()
             fig = px.bar(df, x=unit, y='count', title=f'Activity pattern of {label if label != "" else "all animals combined"} by {"hour of the day" if unit == "Hour" else "month of the year"} (n = {total_observations})').update_traces(width = 0.7)
             fig.update_layout(
                 xaxis=dict(
@@ -1722,7 +1674,7 @@ def produce_plots(results_dir):
             plot_static_activity_pattern(monthly_df, "Month", label);plt.close('all')
             plot_dynamic_activity_pattern(hourly_df, "Hour", label);plt.close('all')
             plot_dynamic_activity_pattern(monthly_df, "Month", label);plt.close('all')
-        
+
         # run combined
         plot_static_activity_pattern(hourly_df, "Hour", "");plt.close('all')
         plot_static_activity_pattern(monthly_df, "Month", "");plt.close('all')
@@ -1793,8 +1745,8 @@ def produce_plots(results_dir):
             Path(os.path.dirname(map_file)).mkdir(parents=True, exist_ok=True)
             m.save(map_file)
             update_pbar_plt()
-        
-        # create plots 
+
+        # create plots
         create_obs_over_geo_both_heat_and_mark(data, save_path_base);plt.close('all')
         create_combined_multi_layer_clustermap(data, save_path_base);plt.close('all')
         for label in data['label'].unique():
@@ -1950,11 +1902,11 @@ def produce_plots(results_dir):
     any_dates_present = det_df['DateTimeOriginal'].notnull().any()
     n_categories_with_timestamps = len(det_df[det_df['DateTimeOriginal'].notnull()]['label'].unique())
     n_obs_per_label_with_timestamps = det_df[det_df['DateTimeOriginal'].notnull()] .groupby('label').size().reset_index(name='count')
-    activity_patterns_n_plots = (((n_categories_with_timestamps * 2) + 2) * 2) if any_dates_present else 0 
-    bar_charts_n_plots = (((n_categories_with_timestamps * 2) + 4) * len(temporal_units)) if any_dates_present else 0 
+    activity_patterns_n_plots = (((n_categories_with_timestamps * 2) + 2) * 2) if any_dates_present else 0
+    bar_charts_n_plots = (((n_categories_with_timestamps * 2) + 4) * len(temporal_units)) if any_dates_present else 0
     maps_n_plots = (n_categories_geo + 2) if data_permits_map_creation else 0
-    pie_charts_n_plots = 4 
-    temporal_heatmaps_n_plots = (4 * len(temporal_units)) if any_dates_present else 0 
+    pie_charts_n_plots = 4
+    temporal_heatmaps_n_plots = (4 * len(temporal_units)) if any_dates_present else 0
     n_plots = (activity_patterns_n_plots + bar_charts_n_plots + maps_n_plots + pie_charts_n_plots + temporal_heatmaps_n_plots)
 
     # create plots
@@ -1979,7 +1931,7 @@ def produce_plots(results_dir):
             if file.endswith(".png"):
                 image_path = os.path.join(root, file)
                 overlay_logo(image_path, logo_for_graphs)
-    
+
     # end pbar
     progress_window.update_values(process = f"plt", status = "done")
 
@@ -2009,12 +1961,11 @@ def open_annotation_windows(recognition_file, class_list_txt, file_list_txt, lab
                      "seleccionados. Utilice el botón 'Actualizar recuentos' para ver cuántas imágenes necesita verificar con "
                      "los criterios seleccionados."][lang_idx])
         return
-    
-    # TODO: progressbars are not in front of other windows
-    # check corrupted images # TODO: this needs to be included in the progressbar
+
+    # check corrupted images
     corrupted_images = check_images(file_list_txt)
 
-    # fix images # TODO: this needs to be included in the progressbar
+    # fix images
     if len(corrupted_images) > 0:
             if mb.askyesno(["Corrupted images found", "Imágenes corruptas encontradas"][lang_idx],
                             [f"There are {len(corrupted_images)} images corrupted. Do you want to repair?",
@@ -2058,7 +2009,7 @@ def open_annotation_windows(recognition_file, class_list_txt, file_list_txt, lab
         hitl_settings_window.destroy()
     except NameError:
         print("hitl_settings_window not defined -> nothing to destroy()")
-        
+
     # init window
     hitl_progress_window = customtkinter.CTkToplevel(root)
     hitl_progress_window.title(["Manual check overview", "Verificación manual"][lang_idx])
@@ -2073,13 +2024,13 @@ def open_annotation_windows(recognition_file, class_list_txt, file_list_txt, lab
     hitl_explenation_frame.columnconfigure(1, weight=1, minsize=115)
 
     # explenation text
-    text_hitl_explenation_frame = Text(master=hitl_explenation_frame, wrap=WORD, width=1, height=15 * explanation_text_box_height_factor) 
+    text_hitl_explenation_frame = Text(master=hitl_explenation_frame, wrap=WORD, width=1, height=15 * explanation_text_box_height_factor)
     text_hitl_explenation_frame.grid(column=0, row=0, columnspan=5, padx=5, pady=5, sticky='ew')
     text_hitl_explenation_frame.tag_config('explanation', font=f'{text_font} {int(13 * text_size_adjustment_factor)} normal', lmargin1=10, lmargin2=10)
     text_hitl_explenation_frame.insert(END, ["This is where you do the actual verification. You'll have to make sure that all objects in all images are correctly "
                                             "labeled. That also includes classes that you did not select but are on the image by chance. If an image is verified, "
                                             "you'll have to let AddaxAI know by pressing the space bar. If all images are verified and up-to-date, you can close "
-                                            "the window. AddaxAI will prompt you for the final step. You can also close the window and continue at a later moment.", 
+                                            "the window. AddaxAI will prompt you for the final step. You can also close the window and continue at a later moment.",
                                             "Deberá asegurarse de que todos los objetos en todas las imágenes estén "
                                             "etiquetados correctamente. Eso también incluye clases que no seleccionaste pero que están en la imagen por casualidad. "
                                             "Si se verifica una imagen, deberá informar a AddaxAI presionando la barra espaciadora. Si todas las imágenes están "
@@ -2111,7 +2062,7 @@ def open_annotation_windows(recognition_file, class_list_txt, file_list_txt, lab
     hitl_stats_frame.columnconfigure(0, weight=3, minsize=115)
     hitl_stats_frame.columnconfigure(1, weight=1, minsize=115)
 
-    # progress bar 
+    # progress bar
     hitl_progbar = ttk.Progressbar(master=hitl_stats_frame, orient='horizontal', mode='determinate', length=280)
     hitl_progbar.grid(column=0, row=0, columnspan=2, padx=5, pady=(3,0))
 
@@ -2189,12 +2140,12 @@ def open_annotation_windows(recognition_file, class_list_txt, file_list_txt, lab
 
             # show window
             hitl_progress_window.update()
-        
+
         # set save status
         try:
             hitl_progress_window.update_idletasks()
             hitl_progress_window.update()
-        
+
         # python can throw a TclError if user closes the window because the widgets are destroyed - nothing to worry about
         except Exception as error:
             print("\nWhen closing the annotation window, there was an error. python can throw a TclError if user closes "
@@ -2215,7 +2166,6 @@ def open_annotation_windows(recognition_file, class_list_txt, file_list_txt, lab
         json_paths_are_relative = False
 
     # open patience window
-    # TODO: dit moet een progresswindow worden die heen en weer gaat. Maar daar heb ik een grote json voor nodig.
     converting_patience_dialog = PatienceDialog(total = 1,
                                                 text = ["Running verification...", "Verificación de funcionamiento..."][lang_idx])
     converting_patience_dialog.open()
@@ -2264,11 +2214,11 @@ def open_annotation_windows(recognition_file, class_list_txt, file_list_txt, lab
                     if not verification_status(xml_path):
                         # set check flag in json
                         image['manually_checked'] = False
-                        # reset confidence from 1.0 to arbitrary value 
+                        # reset confidence from 1.0 to arbitrary value
                         if 'detections' in image:
                             for detection in image['detections']:
                                 detection['conf'] = 0.7
-    
+
     # write json
     image_recognition_file_content.close()
     with open(recognition_file, "w") as json_file:
@@ -2310,13 +2260,13 @@ def open_annotation_windows(recognition_file, class_list_txt, file_list_txt, lab
 
             # buttons
             btn_hitl_final_export_y = Button(master=hitl_final_actions_frame, text=["Yes - choose folder and create training data",
-                                                                                    "Sí - elija la carpeta y crear datos de entrenamiento"][lang_idx], 
+                                                                                    "Sí - elija la carpeta y crear datos de entrenamiento"][lang_idx],
                                     width=1, command = lambda: [uniquify_and_move_img_and_xml_from_filelist(file_list_txt = file_list_txt, recognition_file = recognition_file, hitl_final_window = hitl_final_window),
                                                                 update_frame_states()])
             btn_hitl_final_export_y.grid(row=0, column=0, rowspan=1, sticky='nesw', padx=5)
 
             btn_hitl_final_export_n = Button(master=hitl_final_actions_frame, text=["No - go back to the main AddaxAI window",
-                                                                                    "No - regrese a la ventana principal de AddaxAI"][lang_idx], 
+                                                                                    "No - regrese a la ventana principal de AddaxAI"][lang_idx],
                                     width=1, command = lambda: [delete_temp_folder(file_list_txt),
                                                                 hitl_final_window.destroy(),
                                                                 change_hitl_var_in_json(recognition_file, "done"),
@@ -2354,7 +2304,7 @@ def uniquify_and_move_img_and_xml_from_filelist(file_list_txt, recognition_file,
 
     # init vars
     src_dir = os.path.normpath(var_choose_folder.get())
-    
+
     # loop through the images
     with open(file_list_txt) as f:
 
@@ -2362,7 +2312,7 @@ def uniquify_and_move_img_and_xml_from_filelist(file_list_txt, recognition_file,
         n_imgs = 0
         for i in f:
             n_imgs += 1
-        
+
         # reset file index
         f.seek(0)
 
@@ -2397,7 +2347,7 @@ def uniquify_and_move_img_and_xml_from_filelist(file_list_txt, recognition_file,
             patience_dialog.update_progress(current)
             current += 1
         f.close()
-    
+
     # finalize
     patience_dialog.close()
     delete_temp_folder(file_list_txt)
@@ -2453,7 +2403,7 @@ def start_or_continue_hitl():
     if status == "never-started":
         # open window to select criteria
         open_hitl_settings_window()
-    
+
     # continue previous session
     elif status == "in-progress":
 
@@ -2461,7 +2411,7 @@ def start_or_continue_hitl():
         annotation_arguments_pkl = os.path.join(selected_dir, 'temp-folder', 'annotation_information.pkl')
         with open(annotation_arguments_pkl, 'rb') as fp:
             annotation_arguments = pickle.load(fp)
-        
+
         # update class_txt_file from json in case user added classes last time
         class_list_txt = annotation_arguments['class_list_txt']
         label_map = fetch_label_map_from_json(os.path.join(var_choose_folder.get(), 'image_recognition_file.json'))
@@ -2472,9 +2422,9 @@ def start_or_continue_hitl():
                 f.write(f"{v}\n")
             f.close()
 
-        # ask user 
+        # ask user
         if not mb.askyesno(["Verification session in progress", "Sesión de verificación en curso"][lang_idx],
-                            ["Do you want to continue with the previous verification session? If you press 'No', you will start a new session.", 
+                            ["Do you want to continue with the previous verification session? If you press 'No', you will start a new session.",
                             "¿Quieres continuar con la sesión de verificación anterior? Si presiona 'No', iniciará una nueva sesión."][lang_idx]):
             delete_temp_folder(annotation_arguments['file_list_txt'])
             change_hitl_var_in_json(path_to_image_json, "never-started") # if user closes window, it can start fresh next time
@@ -2490,12 +2440,12 @@ def start_or_continue_hitl():
             except Exception as error:
                 # log error
                 print("ERROR:\n" + str(error) + "\n\nDETAILS:\n" + str(traceback.format_exc()) + "\n\n")
-                
+
                 # show error
                 mb.showerror(title=error_txt[lang_idx],
                             message=["An error has occurred", "Ha ocurrido un error"][lang_idx] + " (AddaxAI v" + current_AA_version + "): '" + str(error) + "'.",
                             detail=traceback.format_exc())
-    
+
     # start new session
     elif status == "done":
         if mb.askyesno(["Previous session is done", "Sesión anterior terminada."][lang_idx], ["It seems like you have completed the previous manual "
@@ -2504,7 +2454,7 @@ def start_or_continue_hitl():
             open_hitl_settings_window()
 
 # open xml and check if the data is already in the json
-def check_if_img_needs_converting(img_file): 
+def check_if_img_needs_converting(img_file):
     # open xml
     root = ET.parse(return_xml_path(img_file)).getroot()
 
@@ -2513,7 +2463,7 @@ def check_if_img_needs_converting(img_file):
         verification_status = True if root.attrib['verified'] == 'yes' else False
     except:
         verification_status = False
-    
+
     # read json update status
     try:
         json_update_status = True if root.attrib['json_updated'] == 'yes' else False
@@ -2521,7 +2471,7 @@ def check_if_img_needs_converting(img_file):
         json_update_status = False
 
     # return whether or not it needs converting to json
-    if verification_status == True and json_update_status == False: 
+    if verification_status == True and json_update_status == False:
         return True
     else:
         return False
@@ -2557,7 +2507,7 @@ def convert_xml_to_coco(xml_path, inverted_label_map):
             inverted_label_map[name] = str(highest_index + 1)
         category = inverted_label_map[name]
 
-        # read 
+        # read
         bndbox = obj.find('bndbox')
         xmin = int(float(bndbox.findtext('xmin')))
         ymin = int(float(bndbox.findtext('ymin')))
@@ -2579,12 +2529,12 @@ def convert_xml_to_coco(xml_path, inverted_label_map):
 
     verified_image = {'file' : path,
                       'detections' : verified_detections}
-    
+
     # return
     return [verified_image, verification_status, new_class, inverted_label_map]
 
 # update json from list with verified images
-def update_json_from_img_list(verified_images, inverted_label_map, recognition_file, patience_dialog, current): 
+def update_json_from_img_list(verified_images, inverted_label_map, recognition_file, patience_dialog, current):
 
         # check if the json has relative paths
         if check_json_paths(recognition_file) == "relative":
@@ -2630,9 +2580,9 @@ def update_json_from_img_list(verified_images, inverted_label_map, recognition_f
             json.dump(data, json_file, indent=1)
         image_recognition_file_content.close()
 
-# write model specific vaiables to file 
+# write model specific vaiables to file
 def write_model_vars(model_type="cls", new_values = None):
-        
+
     # exit is no cls is selected
     if var_cls_model.get() in none_txt:
         return
@@ -2660,9 +2610,9 @@ def classify_detections(json_fpath, data_type, simple_mode = False):
     # show user it's loading
     progress_window.update_values(process = f"{data_type}_cls", status = "load")
     root.update()
-        
+
     # load model specific variables
-    model_vars = load_model_vars() 
+    model_vars = load_model_vars()
     cls_model_fname = model_vars["model_fname"]
     cls_model_type = model_vars["type"]
     cls_model_fpath = os.path.join(AddaxAI_files, "models", "cls", var_cls_model.get(), cls_model_fname)
@@ -2683,10 +2633,10 @@ def classify_detections(json_fpath, data_type, simple_mode = False):
         cls_animal_smooth = False
     else:
         cls_disable_GPU = var_disable_GPU.get()
-        cls_detec_thresh = var_cls_detec_thresh.get() 
+        cls_detec_thresh = var_cls_detec_thresh.get()
         cls_class_thresh = var_cls_class_thresh.get()
         cls_animal_smooth = var_smooth_cls_animal.get()
-        
+
     # init paths
     python_executable = get_python_interprator(cls_model_env)
     inference_script = os.path.join(AddaxAI_files, "AddaxAI", "classification_utils", "model_types", cls_model_type, "classify_detections.py")
@@ -2706,7 +2656,7 @@ def classify_detections(json_fpath, data_type, simple_mode = False):
     except NameError:
         command_args.append("None")
         pass
-    
+
     # adjust command for unix OS
     if os.name != 'nt':
         command_args = "'" + "' '".join(command_args) + "'"
@@ -2797,7 +2747,7 @@ def classify_detections(json_fpath, data_type, simple_mode = False):
         elif line.startswith("GPU available: True"):
             GPU_param = "GPU"
         elif '%' in line[0:4]:
-            
+
             # read stats
             times = re.search("(\[.*?\])", line)[1]
             progress_bar = re.search("^[^\/]*[^[^ ]*", line.replace(times, ""))[0]
@@ -2842,12 +2792,12 @@ def cancel_subprocess(process):
     cancel_deploy_model_pressed = True
     progress_window.close()
 
-# delpoy model and create json output files 
+# delpoy model and create json output files
 warn_smooth_vid = True
 def deploy_model(path_to_image_folder, selected_options, data_type, simple_mode = False):
     # log
     print(f"EXECUTED: {sys._getframe().f_code.co_name}({locals()})\n")
-    
+
     # note if user is video analysing without smoothing
     global warn_smooth_vid
     if (var_cls_model.get() not in none_txt) and \
@@ -2867,13 +2817,13 @@ def deploy_model(path_to_image_folder, selected_options, data_type, simple_mode 
                             " lo que resultará en una sola etiqueta por video. ¿Deseas continuar sin suavizado habilitado?\n\nPresiona "
                             "'No' para regresar."][lang_idx]):
                             return
-    
+
     # display loading window
     # try to update progress window, if AttributeError, it means it tries to update the img_det and we're working with a full image classifier
     try:
         progress_window.update_values(process = f"{data_type}_det", status = "load")
     except AttributeError:
-        pass 
+        pass
 
     # prepare variables
     chosen_folder = str(Path(path_to_image_folder))
@@ -2884,7 +2834,7 @@ def deploy_model(path_to_image_folder, selected_options, data_type, simple_mode 
     GPU_param = "Unknown"
     python_executable = get_python_interprator("base")
 
-    # select model based on user input via dropdown menu, or take MDv5a for simple mode 
+    # select model based on user input via dropdown menu, or take MDv5a for simple mode
     custom_model_bool = False
     if simple_mode:
         det_model_fpath = os.path.join(DET_DIR, "MegaDetector 5a", "md_v5a.0.0.pt")
@@ -2899,8 +2849,8 @@ def deploy_model(path_to_image_folder, selected_options, data_type, simple_mode 
         custom_model_bool = True
 
         # set yolov5 git to accommodate new models (checkout depending on how you retrain MD)
-        switch_yolov5_version("new models") 
-        
+        switch_yolov5_version("new models")
+
         # extract classes
         label_map = extract_label_map_from_model(det_model_fpath)
 
@@ -2909,7 +2859,7 @@ def deploy_model(path_to_image_folder, selected_options, data_type, simple_mode 
         native_model_classes_json_file = os.path.join(chosen_folder, "native_model_classes.json")
         with open(native_model_classes_json_file, "w") as outfile:
             outfile.write(json_object)
-        
+
         # add argument to command call
         selected_options.append("--class_mapping_filename=" + native_model_classes_json_file)
 
@@ -2921,7 +2871,7 @@ def deploy_model(path_to_image_folder, selected_options, data_type, simple_mode 
     full_image_cls = load_model_vars("cls").get("full_image_cls", False)
     if full_image_cls:
         imitate_object_detection_for_full_image_classifier(chosen_folder)
-    
+
     # for crop classifiers we need to run the detection first
     else:
 
@@ -2966,7 +2916,7 @@ def deploy_model(path_to_image_folder, selected_options, data_type, simple_mode 
 
         # log
         print(f"command:\n\n{command}\n\n")
-            
+
         # prepare process and cancel method per OS
         if os.name == 'nt':
             # run windows command
@@ -2986,14 +2936,14 @@ def deploy_model(path_to_image_folder, selected_options, data_type, simple_mode 
                     shell=True,
                     universal_newlines=True,
                     preexec_fn=os.setsid)
-        
+
         # set global vars
         global subprocess_output
         subprocess_output = ""
         previous_processed_img = ["There is no previously processed image. The problematic character is in the first image to analyse.",
                                 "No hay ninguna imagen previamente procesada. El personaje problemático está en la primera imagen a analizar."][lang_idx]
         extracting_frames_mode = False
-        
+
         # check if the unit shown should be frame or video
         if data_type == "vid" and var_cls_model.get() in none_txt:
             frame_video_choice = "video"
@@ -3001,17 +2951,17 @@ def deploy_model(path_to_image_folder, selected_options, data_type, simple_mode 
             frame_video_choice = "frame"
         else:
             frame_video_choice = None
-        
+
         # read output
         for line in p.stdout:
-            
+
             # save output if something goes wrong
             subprocess_output = subprocess_output + line
             subprocess_output = subprocess_output[-1000:]
 
             # log
             print(line, end='')
-            
+
             # catch model errors
             if line.startswith("No image files found"):
                 mb.showerror(["No images found", "No se han encontrado imágenes"][lang_idx],
@@ -3034,7 +2984,7 @@ def deploy_model(path_to_image_folder, selected_options, data_type, simple_mode 
                             [f"{line}\n\nThere seems to be a special character in a filename that cannot be parsed. Unfortunately, it's not"
                             " possible to point you to the problematic file directly, but I can tell you that the last successfully analysed"
                             f" image was\n\n{previous_processed_img}\n\nThe problematic character should be in the file or folder name of "
-                            "the next image, alphabetically. Please remove any special charachters from the path and try again.", 
+                            "the next image, alphabetically. Please remove any special charachters from the path and try again.",
                             f"{line}\n\nParece que hay un carácter especial en un nombre de archivo que no se puede analizar. Lamentablemente,"
                             " no es posible indicarle directamente el archivo problemático, pero puedo decirle que la última imagen analizada "
                             f"con éxito fue\n\n{previous_processed_img}\n\nEl carácter problemático debe estar en el nombre del archivo o "
@@ -3059,7 +3009,7 @@ def deploy_model(path_to_image_folder, selected_options, data_type, simple_mode 
                     with open(model_warning_log, 'a+') as f:
                         f.write(f"{line}\n")
                     f.close()
-                    
+
             # print frame extraction progress and dont continue until done
             if "Extracting frames for folder " in line and \
                 data_type == "vid":
@@ -3077,14 +3027,14 @@ def deploy_model(path_to_image_folder, selected_options, data_type, simple_mode 
                     extracting_frames_mode = False
             if extracting_frames_mode:
                 continue
-            
+
             # get process stats and send them to tkinter
             if line.startswith("GPU available: False"):
                 GPU_param = "CPU"
             elif line.startswith("GPU available: True"):
                 GPU_param = "GPU"
             elif '%' in line[0:4]:
-                
+
                 # read stats
                 times = re.search("(\[.*?\])", line)[1]
                 progress_bar = re.search("^[^\/]*[^[^ ]*", line.replace(times, ""))[0]
@@ -3107,11 +3057,11 @@ def deploy_model(path_to_image_folder, selected_options, data_type, simple_mode 
                                                 cancel_func = lambda: cancel_subprocess(p),
                                                 frame_video_choice = frame_video_choice)
             root.update()
-        
+
         # process is done
         progress_window.update_values(process = f"{data_type}_det", status = "done")
         root.update()
-    
+
     # create addaxai metadata
     addaxai_metadata = {"addaxai_metadata" : {"version" : current_AA_version,
                                                   "custom_model" : custom_model_bool,
@@ -3119,7 +3069,7 @@ def deploy_model(path_to_image_folder, selected_options, data_type, simple_mode 
     if custom_model_bool:
         addaxai_metadata["addaxai_metadata"]["custom_model_info"] = {"model_name" : os.path.basename(os.path.normpath(det_model_fpath)),
                                                                          "label_map" : label_map}
-    
+
     # write metadata to json and make abosulte if specified
     image_recognition_file = os.path.join(chosen_folder, "image_recognition_file.json")
     video_recognition_file = os.path.join(chosen_folder, "video_recognition_file.json")
@@ -3131,7 +3081,7 @@ def deploy_model(path_to_image_folder, selected_options, data_type, simple_mode 
         append_to_json(video_recognition_file, addaxai_metadata)
         if var_abs_paths.get():
             make_json_absolute(video_recognition_file)
-    
+
     # classify detections if specified by user
     if not cancel_deploy_model_pressed:
         if var_cls_model.get() not in none_txt:
@@ -3147,7 +3097,7 @@ def merge_jsons(image_json, video_json, output_file_path):
     if image_json:
         with open(image_json, 'r') as image_file:
             image_data = json.load(image_file)
-            
+
     # Load the video recognition JSON file
     if video_json:
         with open(video_json, 'r') as video_file:
@@ -3172,7 +3122,7 @@ def merge_jsons(image_json, video_json, output_file_path):
         info = video_data['info']
         classification_categories = video_data['classification_categories'] if 'classification_categories' in video_data else {}
         forbidden_classes = video_data['forbidden_classes'] if 'forbidden_classes' in video_data else {}
-        
+
     # Create the merged data
     merged_data = {
         "images": merged_images,
@@ -3244,7 +3194,7 @@ def model_needs_downloading(model_vars, model_type):
 
 # check if a particular environment needs downloading
 def environment_needs_downloading(model_vars):
-       
+
     # find out which env is required
     # if present take os-specific env else take general env
     if os.name == 'nt': # windows
@@ -3253,7 +3203,7 @@ def environment_needs_downloading(model_vars):
         env_name = model_vars.get("env-macos", model_vars.get("env", "base"))
     else: # linux
         env_name = model_vars.get("env-linux", model_vars.get("env", "base"))
-    
+
     # check if that env is already present
     if os.path.isdir(os.path.join(AddaxAI_files, "envs", f'env-{env_name}')):
         return [False, env_name]
@@ -3272,7 +3222,7 @@ def contains_special_characters(path):
 def imitate_object_detection_for_full_image_classifier(chosen_folder):
     # log
     print(f"EXECUTED: {sys._getframe().f_code.co_name}({locals()})\n")
-    
+
     # List all images in the chosen folder
     image_files = [f for f in os.listdir(chosen_folder) if f.lower().endswith(('jpg', 'jpeg', 'png'))]
 
@@ -3292,7 +3242,7 @@ def imitate_object_detection_for_full_image_classifier(chosen_folder):
             }
         }
     }
-    
+
     # Loop through each image in the folder and add it to the result
     for image_file in image_files:
         # Prepare the image's detections with the full image bounding box
@@ -3306,15 +3256,15 @@ def imitate_object_detection_for_full_image_classifier(chosen_folder):
                 }
             ]
         }
-        
+
         # Add image data to the images list
         result["images"].append(image_data)
-    
+
     # Save the result as a JSON file
     json_filename = os.path.join(chosen_folder, "image_recognition_file.json")
     with open(json_filename, "w") as json_file:
         json.dump(result, json_file, indent=4)
-    
+
     print(f"JSON file created: {json_filename}")
 
 # open progress window and initiate the model deployment
@@ -3384,18 +3334,18 @@ def start_deploy(simple_mode = False):
 
     # run species net
     if var_cls_model.get() == "SpeciesNet":
-        
+
         # if simple mode, tell user to use the advanced mode
         if simple_mode:
             mb.showerror(["SpeciesNet not available", "SpeciesNet no disponible"][lang_idx],
                             message=[f"SpeciesNet is not available in simple mode. Please switch to advanced mode to use SpeciesNet.",
                                         f"SpeciesNet no está disponible en modo simple. Cambie al modo avanzado para usar SpeciesNet."][lang_idx])
-            
+
             # reset
             btn_start_deploy.configure(state=NORMAL)
             sim_run_btn.configure(state=NORMAL)
             return
-        
+
         # if videos present, tell users that Species net cannot process them
         if vid_present:
             mb.showerror(["SpeciesNet not available", "SpeciesNet no disponible"][lang_idx],
@@ -3405,11 +3355,11 @@ def start_deploy(simple_mode = False):
             btn_start_deploy.configure(state=NORMAL)
             sim_run_btn.configure(state=NORMAL)
             return
-        
+
         # check if env-speciesnet needs to be downloaded
         model_vars = load_model_vars(model_type = "cls")
         bool, env_name = environment_needs_downloading(model_vars)
-        if bool: # env needs be downloaded, ask user 
+        if bool: # env needs be downloaded, ask user
             user_wants_to_download = download_environment(env_name, model_vars)
             if not user_wants_to_download:
                 btn_start_deploy.configure(state=NORMAL)
@@ -3422,12 +3372,12 @@ def start_deploy(simple_mode = False):
 
         # deploy speciesnet
         return_value = deploy_speciesnet(chosen_folder, sppnet_output_window)
-        
+
         # due to a package conflict on macos there might need to be a restart
         if return_value == "restart":
             sppnet_output_window.add_string("\n\nRestarting SpeciesNet...\n\n")
             deploy_speciesnet(chosen_folder, sppnet_output_window)
-            
+
         # enable button
         btn_start_deploy.configure(state=NORMAL)
         sim_run_btn.configure(state=NORMAL)
@@ -3453,12 +3403,12 @@ def start_deploy(simple_mode = False):
                             " lo que resultará en una sola etiqueta por video. ¿Deseas continuar sin suavizado habilitado?\n\nPresiona "
                             "'No' para regresar."][lang_idx]):
                             return
-    
+
     # de not allow full image classifier to process videos
     full_image_cls = load_model_vars("cls").get("full_image_cls", False)
     if full_image_cls:
         vid_present = False
-    
+
     # check which processes need to be listed on the progress window
     if simple_mode:
         processes = []
@@ -3486,7 +3436,7 @@ def start_deploy(simple_mode = False):
             processes.append("vid_det")
             if var_cls_model.get() not in none_txt:
                 processes.append("vid_cls")
-    
+
     # if working with a full image classifier is selected, remove the detection processes and video stuff
     full_image_cls = load_model_vars("cls").get("full_image_cls", False)
     if full_image_cls:
@@ -3498,7 +3448,7 @@ def start_deploy(simple_mode = False):
             processes.remove("vid_cls")
         if "vid_pst" in processes:
             processes.remove("vid_pst")
-    
+
     # redirect warnings and error to log files
     global model_error_log
     model_error_log = os.path.join(chosen_folder, "model_error_log.txt")
@@ -3526,8 +3476,8 @@ def start_deploy(simple_mode = False):
         if bool is None: # EA needs updating, return to window
             btn_start_deploy.configure(state=NORMAL)
             sim_run_btn.configure(state=NORMAL)
-            return 
-        elif bool: # model can be downloaded, ask user 
+            return
+        elif bool: # model can be downloaded, ask user
             user_wants_to_download = download_model(dirpath)
             if not user_wants_to_download:
                 btn_start_deploy.configure(state=NORMAL)
@@ -3542,7 +3492,7 @@ def start_deploy(simple_mode = False):
         if model_vars == {}: # if selected model is None
             continue
         bool, env_name = environment_needs_downloading(model_vars)
-        if bool: # env needs be downloaded, ask user 
+        if bool: # env needs be downloaded, ask user
             user_wants_to_download = download_environment(env_name, model_vars)
             if not user_wants_to_download:
                 btn_start_deploy.configure(state=NORMAL)
@@ -3568,7 +3518,7 @@ def start_deploy(simple_mode = False):
 
     # simple_mode and advanced mode shared image settings
     additional_img_options = ["--output_relative_filenames"]
-    
+
     # simple_mode and advanced mode shared video settings
     additional_vid_options = ["--json_confidence_threshold=0.01"]
     if timelapse_mode:
@@ -3586,10 +3536,10 @@ def start_deploy(simple_mode = False):
 
     # if user deployed from simple mode everything will be default, so easy
     if simple_mode:
-        
+
         # simple mode specific image options
         additional_img_options.append("--recursive")
-        
+
         # simple mode specific video options
         additional_vid_options.append("--recursive")
         additional_vid_options.append("--time_sample=1")
@@ -3614,7 +3564,7 @@ def start_deploy(simple_mode = False):
             "var_not_all_frames": var_not_all_frames.get(),
             "var_nth_frame": var_nth_frame.get() if var_nth_frame.get().isdecimal() else ""
         })
-        
+
         # check if checkpoint entry is valid
         if var_use_custom_img_size_for_deploy.get() and not var_image_size_for_deploy.get().isdecimal():
             mb.showerror(invalid_value_txt[lang_idx],
@@ -3638,9 +3588,9 @@ def start_deploy(simple_mode = False):
             else:
                 btn_start_deploy.configure(state=NORMAL)
                 sim_run_btn.configure(state=NORMAL)
-                
+
                 return
-        
+
         # check if the nth frame entry is valid
         if var_not_all_frames.get() and not is_valid_float(var_nth_frame.get()):
             if mb.askyesno(invalid_value_txt[lang_idx],
@@ -3673,7 +3623,7 @@ def start_deploy(simple_mode = False):
         if var_not_all_frames.get():
             additional_vid_options.append("--time_sample=" + var_nth_frame.get())
 
-    
+
     # open progress window with frames for each process that needs to be done
     global progress_window
     progress_window = ProgressWindow(processes = processes)
@@ -3702,9 +3652,9 @@ def start_deploy(simple_mode = False):
     total_saved_images = isolated_special_fpaths['total_saved_images'];del isolated_special_fpaths['total_saved_images']
 
     if total_saved_images > 0:
-        # write to log file 
+        # write to log file
         if os.path.isfile(model_special_char_log):
-            os.remove(model_special_char_log)            
+            os.remove(model_special_char_log)
         for k, v in isolated_special_fpaths.items():
             line = f"There are {str(v[0]).ljust(4)} files hidden behind the {str(v[1])} character in folder '{k}'"
             if not line.isprintable():
@@ -3712,7 +3662,7 @@ def start_deploy(simple_mode = False):
                 print(f"\nSPECIAL CHARACTER LOG: This special character is going to give an error : {line}\n")  # log
             with open(model_special_char_log, 'a+', encoding='utf-8') as f:
                 f.write(f"{line}\n")
-        
+
         # log to console
         print(f"\nSPECIAL CHARACTER LOG: There are {total_saved_images} files hidden behind {n_special_chars} special characters.\n")
 
@@ -3727,7 +3677,7 @@ def start_deploy(simple_mode = False):
                                                     f"If you want to make sure these images will be analysed, you would need to manually adjust the names of {n_special_chars} folders.\n"
                                                     "You can find an overview of the probelematic characters and filepaths in the log file:\n\n"
                                                     f"'{model_special_char_log}'\n\n"
-                                                    f"You can also decide to continue with the filepaths as they are now, with the risk of excluding {total_saved_images} files.", 
+                                                    f"You can also decide to continue with the filepaths as they are now, with the risk of excluding {total_saved_images} files.",
                                                     "Los caracteres especiales pueden ser problemáticos durante el análisis, haciendo que se omitan archivos.\n"
                                                     f"Con su actual estructura de carpetas, hay un total de {total_saved_images} archivos que serán potencialmente omitidos.\n"
                                                     f"Si desea asegurarse de que estas imágenes se analizarán, deberá ajustar manualmente los nombres de las carpetas {n_special_chars}.\n"
@@ -3735,7 +3685,7 @@ def start_deploy(simple_mode = False):
                                                     f"'{model_special_char_log}'\n\n"
                                                     f"También puede decidir continuar con las rutas de archivo tal y como están ahora, con el riesgo de excluir archivos {total_saved_images}"][lang_idx],
                                             buttons = special_char_popup_btns)
-        
+
         # run option window and check user input
         user_input = special_char_popup.run()
         if user_input != special_char_popup_btns[0]:
@@ -3756,10 +3706,10 @@ def start_deploy(simple_mode = False):
             deploy_model(chosen_folder, additional_img_options, data_type = "img", simple_mode = simple_mode)
         if vid_present:
             deploy_model(chosen_folder, additional_vid_options, data_type = "vid", simple_mode = simple_mode)
-        
+
         # if deployed through simple mode, add predefined postprocess directly after deployment and classification
         if simple_mode and not timelapse_mode:
-               
+
                 # if only analysing images, postprocess images with plots
                 if "img_pst" in processes and not "vid_pst" in processes:
                     postprocess(src_dir = chosen_folder,
@@ -3774,7 +3724,7 @@ def start_deploy(simple_mode = False):
                                 plt = True,
                                 exp_format = "XLSX",
                                 data_type = "img")
-                
+
                 # if only analysing videos, postprocess videos with plots
                 elif "vid_pst" in processes and not "img_pst" in processes:
                     postprocess(src_dir = chosen_folder,
@@ -3789,7 +3739,7 @@ def start_deploy(simple_mode = False):
                                 plt = True,
                                 exp_format = "XLSX",
                                 data_type = "vid")
-                
+
                 # otherwise postprocess first images without plots, and then videos with plots
                 else:
                     postprocess(src_dir = chosen_folder,
@@ -3822,16 +3772,16 @@ def start_deploy(simple_mode = False):
         image_recognition_file_original = os.path.join(chosen_folder, "image_recognition_file_original.json")
         video_recognition_file = os.path.join(chosen_folder, "video_recognition_file.json")
         video_recognition_file_original = os.path.join(chosen_folder, "video_recognition_file_original.json")
-        video_recognition_file_frame = os.path.join(chosen_folder, "video_recognition_file.frames.json") 
+        video_recognition_file_frame = os.path.join(chosen_folder, "video_recognition_file.frames.json")
         video_recognition_file_frame_original = os.path.join(chosen_folder, "video_recognition_file.frames_original.json")
         timelapse_json = os.path.join(chosen_folder, "timelapse_recognition_file.json")
         exif_data_json = os.path.join(chosen_folder, "exif_data.json")
 
-        # convert to frame jsons to video jsons if frames are classified 
+        # convert to frame jsons to video jsons if frames are classified
         if os.path.isfile(video_recognition_file) and\
             os.path.isfile(video_recognition_file_frame) and\
                 os.path.isfile(video_recognition_file_frame_original):
-                    
+
             # get the frame_rates from the video_recognition_file.json
             frame_rates = {}
             with open(video_recognition_file) as f:
@@ -3841,7 +3791,7 @@ def start_deploy(simple_mode = False):
                     file = image['file']
                     frame_rate = image['frame_rate']
                     frame_rates[file] = frame_rate
-        
+
             # convert frame results to video results
             options = FrameToVideoOptions()
             if timelapse_mode:
@@ -3864,7 +3814,7 @@ def start_deploy(simple_mode = False):
             os.remove(video_recognition_file_frame)
         if os.path.isfile(exif_data_json):
             os.remove(exif_data_json)
-        
+
         # prepare for Timelapse use
         if timelapse_mode:
             # merge json
@@ -3878,7 +3828,7 @@ def start_deploy(simple_mode = False):
                 merge_jsons(image_recognition_file if os.path.isfile(image_recognition_file) else None,
                             video_recognition_file if os.path.isfile(video_recognition_file) else None,
                             timelapse_json)
-            
+
             # remove unnecessary jsons
             if os.path.isfile(image_recognition_file_original):
                 os.remove(image_recognition_file_original)
@@ -3888,15 +3838,15 @@ def start_deploy(simple_mode = False):
                 os.remove(video_recognition_file_original)
             if os.path.isfile(video_recognition_file):
                 os.remove(video_recognition_file)
-        
+
         # prepare for AddaxAI use
         else:
-            
+
             # # If at a later stage I want a merged json for AddaxAI too - this is the code
             # merge_jsons(image_recognition_file if os.path.isfile(image_recognition_file) else None,
             #             video_recognition_file if os.path.isfile(video_recognition_file) else None,
             #             os.path.join(chosen_folder, "merged_recognition_file.json"))
-            
+
             # remove unnecessary jsons
             if os.path.isfile(image_recognition_file_original):
                 os.remove(image_recognition_file_original)
@@ -3905,7 +3855,7 @@ def start_deploy(simple_mode = False):
 
         # reset window
         update_frame_states()
-        
+
         # close progress window
         progress_window.close()
 
@@ -3926,7 +3876,7 @@ def start_deploy(simple_mode = False):
         # show postprocessing warning log
         global postprocessing_error_log
         postprocessing_error_log = os.path.join(chosen_folder, "postprocessing_error_log.txt")
-        if os.path.isfile(postprocessing_error_log): 
+        if os.path.isfile(postprocessing_error_log):
             mb.showwarning(warning_txt[lang_idx], [f"One or more files failed to be analysed by the model (e.g., corrupt files) and will be skipped by "
                                                 f"post-processing features. See\n\n'{postprocessing_error_log}'\n\nfor more info.",
                                                 f"Uno o más archivos no han podido ser analizados por el modelo (por ejemplo, ficheros corruptos) y serán "
@@ -3954,13 +3904,13 @@ def start_deploy(simple_mode = False):
 
         if cancel_deploy_model_pressed:
             pass
-        
+
         else:
             # show error
             mb.showerror(title=error_txt[lang_idx],
                         message=["An error has occurred", "Ha ocurrido un error"][lang_idx] + " (AddaxAI v" + current_AA_version + "): '" + str(error) + "'.",
                         detail=subprocess_output + "\n" + traceback.format_exc())
-            
+
             # close window
             progress_window.close()
 
@@ -3970,7 +3920,7 @@ def start_deploy(simple_mode = False):
 
 # get data from file list and create graph
 def produce_graph(file_list_txt = None, dir = None):
-    
+
     # if a list with images is specified
     if file_list_txt:
         count_dict = {}
@@ -3979,7 +3929,7 @@ def produce_graph(file_list_txt = None, dir = None):
         with open(file_list_txt) as f:
             for line in f:
 
-                # open xml 
+                # open xml
                 img = line.rstrip()
                 annotation = return_xml_path(img)
                 tree = ET.parse(annotation)
@@ -4101,7 +4051,7 @@ def select_detections(selection_dict, prepare_files):
         ann_min_conf_specific = values['scl_ann_var_specific'].get()
         ann_min_confs_generic = values['scl_ann_var_generic'].get()
         ann_min_confs_specific[category] = ann_min_conf_specific
-        
+
         # if class is selected
         if chb_val:
             selected_categories.append(category)
@@ -4135,7 +4085,7 @@ def select_detections(selection_dict, prepare_files):
                 human_verified = image['manually_checked']
             except:
                 human_verified = False
-            
+
             # check all detections ...
             if 'detections' in image:
                 for detection in image['detections']:
@@ -4146,7 +4096,7 @@ def select_detections(selection_dict, prepare_files):
                     # ... if they pass any of the criteria
                     for i in range(len(selected_categories)):
                         if category == selected_categories[i] and conf >= min_confs[i] and conf <= max_confs[i]:
-                            
+
                             # this image contains one or more detections which pass
                             if not image_already_added:
                                 selected_files[selected_categories[i]].append(image_path)
@@ -4159,9 +4109,9 @@ def select_detections(selection_dict, prepare_files):
                         # if one annotation treshold for all classes is specified
                         if rad_ann_val == 1 and conf >= ann_min_confs_generic:
                             display_annotation = True
-                        
+
                         # if class-specific annotation tresholds are specified
-                        elif rad_ann_val == 2 and conf >= ann_min_confs_specific[category]: 
+                        elif rad_ann_val == 2 and conf >= ann_min_confs_specific[category]:
                             display_annotation = True
 
                         # add this detection to the list
@@ -4169,13 +4119,13 @@ def select_detections(selection_dict, prepare_files):
                             im = Image.open(image_path)
                             width, height = im.size
                             left = int(round(detection['bbox'][0] * width)) # xmin
-                            top = int(round(detection['bbox'][1] * height)) # ymin 
+                            top = int(round(detection['bbox'][1] * height)) # ymin
                             right = int(round(detection['bbox'][2] * width)) + left # width
                             bottom = int(round(detection['bbox'][3] * height)) + top # height
                             list = [left, top, None, None, right, bottom, None, category]
                             string = ','.join(map(str, list))
                             annotations.append(string)
-                                    
+
             # create pascal voc annotation file for this image
             if prepare_files:
                 img_and_detections_dict[image_path] = {"annotations": annotations, "human_verified": human_verified}
@@ -4205,7 +4155,7 @@ def select_detections(selection_dict, prepare_files):
             if ent_per_var == "" or ent_per_var < 0 or ent_per_var > 100:
                 invalid_value_warning([f"percentage of images for class '{category}'", f"porcentaje de imágenes para la clase '{category}'"][lang_idx])
                 return
-            
+
             # randomly select percentage of images
             total_n = len(files)
             n_selected = int(total_n * (ent_per_var / 100))
@@ -4213,7 +4163,7 @@ def select_detections(selection_dict, prepare_files):
             files = files[:n_selected]
 
         # user specified a max number of images
-        elif chb_var and rad_var == 3: 
+        elif chb_var and rad_var == 3:
 
             # check if entry is valid
             ent_amt_var = selection_dict[row]['ent_amt_var'].get()
@@ -4232,7 +4182,7 @@ def select_detections(selection_dict, prepare_files):
             random.shuffle(files)
             files = files[:n_selected]
 
-        # update label text 
+        # update label text
         n_imgs = len(files)
         lbl_n_img.configure(text = str(n_imgs))
         total_imgs += n_imgs
@@ -4244,7 +4194,7 @@ def select_detections(selection_dict, prepare_files):
             patience_dialog = PatienceDialog(total = n_imgs, text = [f"Preparing files for {category}...", f"Preparando archivos para {category}..."][lang_idx])
             patience_dialog.open()
             current = 1
-            
+
             # human sort images per class
             def atoi(text):
                 return int(text) if text.isdigit() else text
@@ -4263,8 +4213,8 @@ def select_detections(selection_dict, prepare_files):
                 with open(file_list_txt, 'a') as f:
                     f.write(f"{os.path.normpath(img)}\n")
                     f.close()
-                
-                # # list annotaions 
+
+                # # list annotaions
                 annotation_path = return_xml_path(img)
 
                 # create xml file if not already present
@@ -4272,16 +4222,15 @@ def select_detections(selection_dict, prepare_files):
                     create_pascal_voc_annotation(img, img_and_detections_dict[img]['annotations'], img_and_detections_dict[img]['human_verified'])
 
             # close patience window
-            patience_dialog.close()      
+            patience_dialog.close()
     steps_progress.update_progress(current_step);current_step += 1
     steps_progress.close()
 
     # update total number of images
     lbl_n_total_imgs.configure(text = [f"TOTAL: {total_imgs}", f"TOTAL: {total_imgs}"][lang_idx])
-    
+
     if prepare_files:
 
-        # TODO: hier moet ook een progress window komen als het een grote file is
 
         # create file with classes
         with open(class_list_txt, 'a') as f:
@@ -4310,7 +4259,7 @@ def select_detections(selection_dict, prepare_files):
         except Exception as error:
             # log error
             print("ERROR:\n" + str(error) + "\n\nDETAILS:\n" + str(traceback.format_exc()) + "\n\n")
-            
+
             # show error
             mb.showerror(title=error_txt[lang_idx],
                         message=["An error has occurred", "Ha ocurrido un error"][lang_idx] + " (AddaxAI v" + current_AA_version + "): '" + str(error) + "'.",
@@ -4341,7 +4290,6 @@ def open_hitl_settings_window():
     # log
     print(f"EXECUTED: {sys._getframe().f_code.co_name}({locals()})\n")
 
-    # TODO: this window pops up behind the main AddaxAI window on windows OS. place in front, or hide AddaxAI frame.
 
     # fetch confs for histograms
     confs = fetch_confs_per_class(os.path.join(var_choose_folder.get(), 'image_recognition_file.json'))
@@ -4376,7 +4324,7 @@ def open_hitl_settings_window():
     hitl_settings_scrollbar = tk.Scrollbar(hitl_settings_scroll_frame, orient=VERTICAL, command=hitl_settings_canvas.yview)
     hitl_settings_scrollbar.pack(side=RIGHT, fill=Y)
 
-    # enable scroll on mousewheel 
+    # enable scroll on mousewheel
     def hitl_settings_canvas_mousewheel(event):
         if os.name == 'nt':
             hitl_settings_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
@@ -4387,7 +4335,7 @@ def open_hitl_settings_window():
     hitl_settings_canvas.configure(yscrollcommand=hitl_settings_scrollbar.set)
     hitl_settings_canvas.bind('<Configure>', lambda e: hitl_settings_canvas.configure(scrollregion=hitl_settings_canvas.bbox("all")))
     hitl_settings_canvas.bind_all("<MouseWheel>", hitl_settings_canvas_mousewheel)
-    hitl_settings_canvas.bind_all("<Button-4>", hitl_settings_canvas_mousewheel) 
+    hitl_settings_canvas.bind_all("<Button-4>", hitl_settings_canvas_mousewheel)
     hitl_settings_canvas.bind_all("<Button-5>", hitl_settings_canvas_mousewheel)
 
     # set labelframe to fill with widgets
@@ -4415,7 +4363,7 @@ def open_hitl_settings_window():
 
     # img explanation
     Button(master=hitl_img_selection_frame, text="?", width=1, command=show_text_hitl_img_selection_explanation).grid(column=0, row=0, columnspan=1, padx=5, pady=5, sticky='ew')
-    text_hitl_img_selection_explanation = Text(master=hitl_img_selection_frame, wrap=WORD, width=1, height=12 * explanation_text_box_height_factor) 
+    text_hitl_img_selection_explanation = Text(master=hitl_img_selection_frame, wrap=WORD, width=1, height=12 * explanation_text_box_height_factor)
     text_hitl_img_selection_explanation.tag_config('explanation', font=f'{text_font} {int(13 * text_size_adjustment_factor)} normal', lmargin1=10, lmargin2=10)
     text_hitl_img_selection_explanation.insert(END, ["Here, you can specify which images you wish to review. If a detection aligns with the chosen criteria, the image will be "
                                                     "chosen for the verification process. In the review process, you’ll need to make sure all detections in the image are correct. "
@@ -4458,7 +4406,7 @@ def open_hitl_settings_window():
     hitl_ann_selection_frame.columnconfigure(4, weight=1, minsize=200)
 
     # ann explanation
-    text_hitl_ann_selection_explanation = Text(master=hitl_ann_selection_frame, wrap=WORD, width=1, height=5 * explanation_text_box_height_factor) 
+    text_hitl_ann_selection_explanation = Text(master=hitl_ann_selection_frame, wrap=WORD, width=1, height=5 * explanation_text_box_height_factor)
     text_hitl_ann_selection_explanation.grid(column=0, row=0, columnspan=5, padx=5, pady=5, sticky='ew')
     text_hitl_ann_selection_explanation.tag_config('explanation', font=f'{text_font} {int(13 * text_size_adjustment_factor)} normal', lmargin1=10, lmargin2=10)
     text_hitl_ann_selection_explanation.insert(END, ["In the previous step, you selected which images to verify. In this frame, you can specify which annotations to display "
@@ -4502,7 +4450,7 @@ def open_hitl_settings_window():
     label_map = fetch_label_map_from_json(recognition_file)
     selection_dict = {}
     for i, [k, v] in enumerate(label_map.items()):
-        
+
         # image selection frame
         row = i + 2
         frame = LabelFrame(hitl_img_selection_frame, text="", pady=2, padx=5, relief=RAISED)
@@ -4552,8 +4500,8 @@ def open_hitl_settings_window():
         scl_ann_gene.grid(row=0, column=1, sticky='we')
         dsp_scl_ann_gene = Label(frame_ann, textvariable=scl_ann_var_specific, state = DISABLED)
         dsp_scl_ann_gene.grid(row=0, column=0, sticky='e', padx=5)
-        
-        # store info in a dictionary 
+
+        # store info in a dictionary
         item = {'row': row,
                 'label_map_id': k,
                 'class': v,
@@ -4640,7 +4588,7 @@ def open_hitl_settings_window():
     btn_hitl_show.grid(row=0, column=1, rowspan=1, sticky='nesw', padx=5)
     btn_hitl_start = Button(master=hitl_test_frame, text=btn_hitl_start_txt, width=1, command=lambda: select_detections(selection_dict = selection_dict, prepare_files = True))
     btn_hitl_start.grid(row=0, column=2, rowspan=1, sticky='nesw', padx=5)
-    
+
     # create scrollable canvas window
     hitl_settings_canvas.create_window((0, 0), window=hitl_settings_main_frame, anchor="nw")
 
@@ -4702,7 +4650,7 @@ def on_toplevel_close():
         })
     root.destroy()
 
-# check if image is corrupted by attepting to load them 
+# check if image is corrupted by attepting to load them
 def is_image_corrupted(image_path):
     try:
         ImageFile.LOAD_TRUNCATED_IMAGES = False
@@ -4711,7 +4659,7 @@ def is_image_corrupted(image_path):
         ImageFile.LOAD_TRUNCATED_IMAGES = True
         return False
     except:
-        return True 
+        return True
 
 # read file list and check all images if they are corrupted
 def check_images(image_list_file):
@@ -4752,13 +4700,13 @@ class SpeciesNetOutputWindow:
         self.close_button.pack(pady=5)
         self.sppnet_output_window_root.protocol("WM_DELETE_WINDOW", self.close)  # Handle window close
         bring_window_to_top_but_not_for_ever(self.sppnet_output_window_root)
-    
+
     def add_string(self, text, process=None):
         if process is not None:
             self.process = process
         if text.strip():
             print(text)
-            
+
             clean_text = remove_ansi_escape_sequences(text)
 
             # Check if this is a progress bar update
@@ -4805,10 +4753,10 @@ class SpeciesNetOutputWindow:
             # Ensure scrolling to the latest update
             self.text_area.see(tk.END)
             self.sppnet_output_window_root.update()
-    
+
     def close(self):
         self.sppnet_output_window_root.destroy()
-        
+
     def cancel(self):
         global cancel_speciesnet_deploy_pressed
         global btn_start_deploy
@@ -4826,7 +4774,7 @@ class SpeciesNetOutputWindow:
 def deploy_speciesnet(chosen_folder, sppnet_output_window, simple_mode = False):
     # log
     print(f"EXECUTED: {sys._getframe().f_code.co_name}({locals()})\n")
-    
+
     # prepare variables
     chosen_folder = str(Path(chosen_folder))
     python_executable = get_python_interprator("speciesnet")
@@ -4838,7 +4786,7 @@ def deploy_speciesnet(chosen_folder, sppnet_output_window, simple_mode = False):
         "var_cls_model_idx": dpd_options_cls_model[lang_idx].index(var_cls_model.get()),
         "var_sppnet_location_idx": dpd_options_sppnet_location[lang_idx].index(var_sppnet_location.get())
     })
-    
+
     # save advanced settings for next time
     if not simple_mode:
         write_global_vars({
@@ -4858,7 +4806,7 @@ def deploy_speciesnet(chosen_folder, sppnet_output_window, simple_mode = False):
             "var_not_all_frames": var_not_all_frames.get(),
             "var_nth_frame": var_nth_frame.get() if var_nth_frame.get().isdecimal() else ""
         })
-    
+
     # get param values
     model_vars = load_model_vars()
     if simple_mode:
@@ -4891,7 +4839,7 @@ def deploy_speciesnet(chosen_folder, sppnet_output_window, simple_mode = False):
         else:
             location_args = "' '".join(location_args)
             command = [f"'{python_executable}' -m speciesnet.scripts.run_model --folders='{chosen_folder}' --predictions_json='{sppnet_output_file}' '{location_args}'"]
-    
+
     # log command
     print("command:")
     print(json.dumps(command, indent=4))
@@ -4921,22 +4869,22 @@ def deploy_speciesnet(chosen_folder, sppnet_output_window, simple_mode = False):
 
     # read output
     for line in p.stdout:
-        
+
         # log
         sppnet_output_window.add_string(line, p)
-        
+
         # early exit if cancel button is pressed
         if cancel_speciesnet_deploy_pressed:
             sppnet_output_window.add_string("\n\nCancel button pressed!")
             time.sleep(2)
             return
-        
+
         # temporary fix for macOS package conflict
         # since the env is compiled on macOS 10.15, scipy is not compatible with macOS 10.14
         if line.startswith("ImportError: "):
             sppnet_output_window.add_string(f"\n\nThere seems to be a mismatch between macOS versions: {line}\n\n")
             sppnet_output_window.add_string("Attempting to solve conflict automatically...\n\n")
-            
+
             # uninstall scipy
             p = Popen(f"{python_executable} -m pip uninstall -y scipy",
                 stdout=subprocess.PIPE,
@@ -4947,7 +4895,7 @@ def deploy_speciesnet(chosen_folder, sppnet_output_window, simple_mode = False):
                 preexec_fn=os.setsid)
             for line in p.stdout:
                 sppnet_output_window.add_string(line)
-            
+
             # install scipy again
             p = Popen(f"{python_executable} -m pip install --no-cache-dir scipy",
                 stdout=subprocess.PIPE,
@@ -4958,26 +4906,26 @@ def deploy_speciesnet(chosen_folder, sppnet_output_window, simple_mode = False):
                 preexec_fn=os.setsid)
             for line in p.stdout:
                 sppnet_output_window.add_string(line)
-            
+
             # retry
             return "restart"
-    
+
     # convert json to AddaxAI format
     sppnet_output_window.add_string("\n\nConverting SpeciesNet output to AddaxAI format...")
     speciesnet_to_md_py = os.path.join(AddaxAI_files, "AddaxAI", "classification_utils", "model_types", "speciesnet_to_md.py")
     recognition_file = os.path.join(chosen_folder, "image_recognition_file.json")
-    
+
     # cmd for windows
-    if os.name == 'nt': 
+    if os.name == 'nt':
         p = Popen([f"{python_executable}", f"{speciesnet_to_md_py}", f"{sppnet_output_file}", f"{recognition_file}"],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 bufsize=1,
                 shell=True,
                 universal_newlines=True)
-    
+
     # cmd for macos and linux
-    else: 
+    else:
         p = Popen([f'"{python_executable}" "{speciesnet_to_md_py}" "{sppnet_output_file}" "{recognition_file}"'],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
@@ -4985,29 +4933,29 @@ def deploy_speciesnet(chosen_folder, sppnet_output_window, simple_mode = False):
                 shell=True,
                 universal_newlines=True,
                 preexec_fn=os.setsid)
-    
+
     # log output
     for line in p.stdout:
         sppnet_output_window.add_string(line, p)
     sppnet_output_window.add_string("\n\nConverting Done!")
-    
+
     # if that is done, remove the speciesnet output file
     if os.path.exists(sppnet_output_file):
         os.remove(sppnet_output_file)
-    
+
     # create addaxai metadata
     sppnet_output_window.add_string("\n\nAdding AddaxAI metadata...")
     addaxai_metadata = {"addaxai_metadata" : {"version" : current_AA_version,
                                                   "custom_model" : False,
                                                   "custom_model_info" : {}}}
-    
+
     # write metadata to json and make abosulte if specified
     append_to_json(recognition_file, addaxai_metadata)
-    
+
     # get rid of absolute paths if specified
     if check_json_paths(recognition_file) == "absolute":
         make_json_relative(recognition_file)
-    
+
     # if in timelapse mode, change name of recognition file
     if timelapse_mode:
         timelapse_json = os.path.join(chosen_folder, "timelapse_recognition_file.json")
@@ -5016,7 +4964,7 @@ def deploy_speciesnet(chosen_folder, sppnet_output_window, simple_mode = False):
                                         "Timelapse with the relevant image set open, select the menu item 'Recognition > Import "
                                         "recognition data for this image set' and navigate to the file above.")
         open_file_or_folder(os.path.dirname(timelapse_json))
-        
+
     # convert JSON to AddaxAI format if not in timelapse mode
     else:
         with open(recognition_file) as image_recognition_file_content:
@@ -5031,10 +4979,10 @@ def deploy_speciesnet(chosen_folder, sppnet_output_window, simple_mode = False):
             # add cls classes to det label map
             # if a model shares category names with MD, add to existing value
             for k, _ in inverted_cls_label_map.items():
-                if k in inverted_det_label_map.keys(): 
+                if k in inverted_det_label_map.keys():
                     value = str(inverted_det_label_map[k])
                     inverted_det_label_map[k] = value
-                else:              
+                else:
                     inverted_det_label_map[k] = str(len(inverted_det_label_map) + 1)
 
             # loop and adjust
@@ -5057,7 +5005,7 @@ def deploy_speciesnet(chosen_folder, sppnet_output_window, simple_mode = False):
         # write json to be used by AddaxAI
         data['detection_categories_original'] = data['detection_categories']
         data['detection_categories'] = {v: k for k, v in inverted_det_label_map.items()}
-        
+
         # overwrite the file wit adjusted data
         with open(recognition_file, "w") as json_file:
             json.dump(data, json_file, indent=1)
@@ -5071,7 +5019,7 @@ def convert_bbox_pascal_to_yolo(size, box):
     dw = 1./(size[0])
     dh = 1./(size[1])
     x = (box[0] + box[1])/2.0 - 1
-    y = (box[2] + box[3])/2.0 - 1 
+    y = (box[2] + box[3])/2.0 - 1
     w = box[1] - box[0]
     h = box[3] - box[2]
     x = x*dw
@@ -5082,13 +5030,13 @@ def convert_bbox_pascal_to_yolo(size, box):
 
 # special function because the sim dpd has a different value for 'None'
 def sim_mdl_dpd_callback(self):
-    
+
     # this means the user chose SpeciesNet in simple mode, so tell user to use the advanced mode
     if self == "SpeciesNet":
         mb.showerror(["SpeciesNet not available", "SpeciesNet no disponible"][lang_idx],
                         message=[f"SpeciesNet is not available in simple mode. Please switch to advanced mode to use SpeciesNet.",
                                     f"SpeciesNet no está disponible en modo simple. Cambie al modo avanzado para usar SpeciesNet."][lang_idx])
-    
+
     var_cls_model.set(dpd_options_cls_model[lang_idx][sim_dpd_options_cls_model[lang_idx].index(self)])
     model_cls_animal_options(var_cls_model.get())
 
@@ -5110,7 +5058,7 @@ class LabelImgExchangeDir:
         temp_file = os.path.normpath(os.path.join(self.dir, f"{timestamp_miliseconds}-{idx}.txt"))
         with open(temp_file, 'w') as f:
             f.write(content)
-    
+
     def read_file(self, fp):
         with open(fp, 'r') as f:
             content = f.read()
@@ -5136,12 +5084,12 @@ def delete_temp_folder(file_list_txt):
 def browse_file(var, var_short, var_path, dsp, filetype, cut_off_length, options, nrow):
     # choose file
     file = filedialog.askopenfilename(filetypes=filetype)
-    
+
     # shorten if needed
     dsp_file = os.path.basename(file)
     if len(dsp_file) > cut_off_length:
         dsp_file = "..." + dsp_file[0 - cut_off_length + 3:]
-    
+
     # set variables
     var_short.set(dsp_file)
 
@@ -5156,7 +5104,7 @@ def browse_file(var, var_short, var_path, dsp, filetype, cut_off_length, options
 def switch_yolov5_version(model_type):
     # log
     print(f"EXECUTED: {sys._getframe().f_code.co_name}({model_type})\n")
-    
+
     # set the path to the desired version
     base_path = os.path.join(AddaxAI_files, "yolov5_versions")
     if model_type == "old models":
@@ -5165,17 +5113,17 @@ def switch_yolov5_version(model_type):
         version_path = os.path.join(base_path, "yolov5_new", "yolov5")
     else:
         raise ValueError("Invalid model_type")
-        
+
     # add yolov5 checkout to PATH if not already there
     if version_path not in sys.path:
         sys.path.insert(0, version_path)
-    
+
     # add yolov5 checkout to PYTHONPATH if not already there
     current_pythonpath = os.environ.get("PYTHONPATH", "")
     PYTHONPATH_to_add = version_path + PYTHONPATH_separator
     if not current_pythonpath.startswith(PYTHONPATH_to_add):
         os.environ["PYTHONPATH"] = PYTHONPATH_to_add + current_pythonpath
-        
+
 # extract label map from custom model
 def extract_label_map_from_model(model_file):
     # log
@@ -5186,7 +5134,7 @@ def extract_label_map_from_model(model_file):
 
     # load model
     label_map_detector = PTDetector(model_file, force_cpu = True)
-    
+
     # fetch classes
     try:
         CUSTOM_DETECTOR_LABEL_MAP = {}
@@ -5195,7 +5143,7 @@ def extract_label_map_from_model(model_file):
     except Exception as error:
         # log error
         print("ERROR:\n" + str(error) + "\n\nDETAILS:\n" + str(traceback.format_exc()) + "\n\n")
-        
+
         # show error
         mb.showerror(title=error_txt[lang_idx],
                      message=["An error has occurred when trying to extract classes", "Se ha producido un error al intentar extraer las clases"][lang_idx] +
@@ -5203,10 +5151,10 @@ def extract_label_map_from_model(model_file):
                                 [".\n\nWill try to proceed and produce the output json file, but post-processing features of AddaxAI will not work.",
                                  ".\n\nIntentará continuar y producir el archivo json de salida, pero las características de post-procesamiento de AddaxAI no funcionarán."][lang_idx],
                      detail=traceback.format_exc())
-    
+
     # delete and free up memory
     del label_map_detector
-    
+
     # log
     print(f"Label map: {CUSTOM_DETECTOR_LABEL_MAP})\n")
 
@@ -5221,7 +5169,7 @@ def fetch_label_map_from_json(path_to_json):
     return label_map
 
 # check if json paths are relative or absolute
-def check_json_paths(path_to_json): 
+def check_json_paths(path_to_json):
     with open(path_to_json, "r") as json_file:
         data = json.load(json_file)
     path = os.path.normpath(data['images'][0]['file'])
@@ -5236,30 +5184,30 @@ def make_json_relative(path_to_json):
         # open
         with open(path_to_json, "r") as json_file:
             data = json.load(json_file)
-        
+
         # adjust
         for image in data['images']:
             absolute_path =  os.path.normpath(image['file'])
             relative_path = absolute_path.replace(os.path.normpath(var_choose_folder.get()), "")[1:]
             image['file'] = relative_path
-        
+
         # write
         with open(path_to_json, "w") as json_file:
             json.dump(data, json_file, indent=1)
-            
+
 # make json paths absolute
 def make_json_absolute(path_to_json):
     if check_json_paths(path_to_json) == "relative":
         # open
         with open(path_to_json, "r") as json_file:
             data = json.load(json_file)
-        
+
         # adjust
         for image in data['images']:
             relative_path = image['file']
             absolute_path = os.path.normpath(os.path.join(var_choose_folder.get(), relative_path))
             image['file'] = absolute_path
-        
+
         # write
         with open(path_to_json, "w") as json_file:
             json.dump(data, json_file, indent=1)
@@ -5269,7 +5217,7 @@ def append_to_json(path_to_json, object_to_be_appended):
     # open
     with open(path_to_json, "r") as json_file:
         data = json.load(json_file)
-    
+
     # adjust
     data['info'].update(object_to_be_appended)
 
@@ -5282,7 +5230,7 @@ def change_hitl_var_in_json(path_to_json, status):
     # open
     with open(path_to_json, "r") as json_file:
         data = json.load(json_file)
-    
+
     # adjust
     data['info']["addaxai_metadata"]["hitl_status"] = status
 
@@ -5296,7 +5244,7 @@ def get_hitl_var_in_json(path_to_json):
     with open(path_to_json, "r") as json_file:
         data = json.load(json_file)
         addaxai_metadata = data['info'].get("addaxai_metadata") or data['info'].get("ecoassist_metadata") # include old name 'EcoAssist' for backwards compatibility
-    
+
     # get status
     if "hitl_status" in addaxai_metadata:
         status = addaxai_metadata["hitl_status"]
@@ -5315,7 +5263,7 @@ def check_json_presence_and_warn_user(infinitive, continuous, noun):
     vid_json = False
     if os.path.isfile(os.path.join(var_choose_folder.get(), "video_recognition_file.json")):
         vid_json = True
-    
+
     # show warning
     if not img_json:
         if vid_json:
@@ -5362,20 +5310,20 @@ def move_files(file, detection_type, var_file_placement, max_detection_conf, var
         new_file = os.path.join(detection_type, confidence_dir, file)
     else:
         new_file = os.path.join(detection_type, file)
-    
+
     # set paths
     src = os.path.join(src_dir, file)
     dst = os.path.join(dst_root, new_file)
-    
+
     # create subfolder
     Path(os.path.dirname(dst)).mkdir(parents=True, exist_ok=True)
-    
+
     # place image or video in subfolder
     if var_file_placement == 1: # move
         shutil.move(src, dst)
     elif var_file_placement == 2: # copy
         shutil.copy2(src, dst)
-        
+
     # return new relative file path
     return(new_file)
 
@@ -5412,7 +5360,7 @@ def shorten_path(path, length):
     return path
 
 # browse directory
-def browse_dir(var, var_short, dsp, cut_off_length, n_row, n_column, str_sticky, source_dir = False):    
+def browse_dir(var, var_short, dsp, cut_off_length, n_row, n_column, str_sticky, source_dir = False):
     # log
     print(f"EXECUTED: {sys._getframe().f_code.co_name}({locals()})\n")
 
@@ -5425,13 +5373,13 @@ def browse_dir(var, var_short, dsp, cut_off_length, n_row, n_column, str_sticky,
 
     # set choice to variable
     var.set(chosen_dir)
-    
+
     # shorten, set and grid display
     dsp_chosen_dir = chosen_dir
     dsp_chosen_dir = shorten_path(dsp_chosen_dir, cut_off_length)
     var_short.set(dsp_chosen_dir)
     dsp.grid(column=n_column, row=n_row, sticky=str_sticky)
-    
+
     # also update simple mode if it regards the source dir
     if source_dir:
         global sim_dir_pth
@@ -5450,7 +5398,7 @@ def model_cls_animal_options(self):
         cls_frame.grid(row=cls_frame_row, column=0, columnspan=2, sticky = 'ew')
     else:
         cls_frame.grid_forget()
-    
+
     # get model specific variable values
     global sim_spp_scr
     if self not in none_txt and self != "SpeciesNet": # normal procedure for all classifiers other than speciesnet
@@ -5473,7 +5421,7 @@ def model_cls_animal_options(self):
         dsp_cls_class_thresh.grid(row=row_cls_class_thresh, column=0, sticky='e', padx=0)
         lbl_smooth_cls_animal.grid(row=row_smooth_cls_animal, sticky='nesw', pady=2)
         chb_smooth_cls_animal.grid(row=row_smooth_cls_animal, column=1, sticky='nesw', padx=5)
-        
+
         # set rowsize
         set_minsize_rows(cls_frame)
 
@@ -5489,7 +5437,7 @@ def model_cls_animal_options(self):
         sim_spp_scr.grid(row=1, column=0, padx=PADX, pady=(PADY/4, PADY), sticky="ew", columnspan = 2)
 
     elif self == "SpeciesNet": # special procedure for speciesnet
-        
+
         # remove widgets for other classifiers
         lbl_choose_classes.grid_remove()
         btn_choose_classes.grid_remove()
@@ -5499,16 +5447,16 @@ def model_cls_animal_options(self):
         dsp_cls_class_thresh.grid_remove()
         lbl_smooth_cls_animal.grid_remove()
         chb_smooth_cls_animal.grid_remove()
-        
+
         # set rowsize to 0
         cls_frame.grid_rowconfigure(2, minsize=0)
         cls_frame.grid_rowconfigure(3, minsize=0)
         cls_frame.grid_rowconfigure(4, minsize=0)
-        
+
         # place widgets for speciesnet
         lbl_sppnet_location.grid(row=row_sppnet_location, sticky='nesw', pady=2)
         dpd_sppnet_location.grid(row=row_sppnet_location, column=1, sticky='nesw', padx=5, pady=2)
-        
+
         # set selection frame to dummy spp again
         sim_spp_lbl.configure(text_color = "grey")
         sim_spp_scr.grid_forget()
@@ -5529,7 +5477,7 @@ def model_cls_animal_options(self):
         "var_cls_model_idx": dpd_options_cls_model[lang_idx].index(var_cls_model.get()),  # write index instead of value
         "var_sppnet_location_idx": dpd_options_sppnet_location[lang_idx].index(var_sppnet_location.get()),  # write index instead of value
         })
- 
+
     # finish up
     toggle_cls_frame()
     resize_canvas_to_content()
@@ -5538,10 +5486,10 @@ def model_cls_animal_options(self):
 def model_options(self):
     # log
     print(f"EXECUTED: {sys._getframe().f_code.co_name}({locals()})\n")
-   
+
     # if custom model is selected
     if var_det_model.get() in custom_model_txt:
-        
+
         # choose, display and set global var
         browse_file(var_det_model,
                     var_det_model_short,
@@ -5566,10 +5514,10 @@ def view_results(frame):
     # log
     print(f"EXECUTED: {sys._getframe().f_code.co_name}({locals()})")
     print(f"frame text: {frame.cget('text')}\n")
-    
+
     # convert path separators
     chosen_folder = os.path.normpath(var_choose_folder.get())
-    
+
     # set json paths
     image_recognition_file = os.path.join(chosen_folder, "image_recognition_file.json")
     video_recognition_file = os.path.join(chosen_folder, "video_recognition_file.json")
@@ -5580,7 +5528,7 @@ def view_results(frame):
             open_file_or_folder(image_recognition_file)
         if os.path.isfile(video_recognition_file):
             open_file_or_folder(video_recognition_file)
-    
+
     # open destination folder at step 4
     if frame.cget('text').startswith(f' {step_txt[lang_idx]} 4'):
         open_file_or_folder(var_output_dir.get())
@@ -5589,12 +5537,12 @@ def view_results(frame):
 def open_file_or_folder(path, show_error = True):
     # log
     print(f"EXECUTED: {sys._getframe().f_code.co_name}({locals()})\n")
-    
+
     # set language var
     error_opening_results_txt = ["Error opening results", "Error al abrir los resultados"]
 
     # open file
-    if platform.system() == 'Darwin': # mac  
+    if platform.system() == 'Darwin': # mac
         try:
             subprocess.call(('open', path))
         except:
@@ -5621,7 +5569,7 @@ def open_file_or_folder(path, show_error = True):
                                                                 f"No se ha podido abrir '{path}'. Ni el comando 'xdg-open' ni el 'gnome-open' funcionaron. "
                                                                 "Tendrá que encontrarlo usted mismo..."][lang_idx])
 
-# retrieve model specific vaiables from file 
+# retrieve model specific vaiables from file
 def load_model_vars(model_type = "cls"):
     if var_cls_model.get() in none_txt and model_type == "cls":
         return {}
@@ -5634,7 +5582,7 @@ def load_model_vars(model_type = "cls"):
     except:
         return {}
 
-# write global vaiables to file 
+# write global vaiables to file
 def write_global_vars(new_values = None):
     # adjust
     variables = load_global_vars()
@@ -5718,7 +5666,7 @@ def set_up_unkown_model(title, model_dict, model_type):
     with open(var_file, "w") as vars:
         json.dump(model_dict, vars, indent=2)
 
-# check if this is the first startup since install 
+# check if this is the first startup since install
 def is_first_startup():
     return os.path.exists(os.path.join(AddaxAI_files, "first-startup.txt"))
 
@@ -5735,7 +5683,7 @@ def distribute_individual_model_jsons(model_info_fpath):
 
     model_info = json.load(open(model_info_fpath))
     for typ in ["det", "cls"]:
-        model_dicts = model_info[typ] 
+        model_dicts = model_info[typ]
         all_models = list(model_dicts.keys())
         for model_id in all_models:
             model_dict = model_dicts[model_id]
@@ -5778,7 +5726,7 @@ def fetch_latest_model_info():
                 # check if there is a new model available
                 model_info = json.load(open(model_info_fpath))
                 for typ in ["det", "cls"]:
-                    model_dicts = model_info[typ] 
+                    model_dicts = model_info[typ]
                     all_models = list(model_dicts.keys())
                     known_models = fetch_known_models(CLS_DIR if typ == "cls" else DET_DIR)
                     unknown_models = [e for e in all_models if e not in known_models]
@@ -5836,7 +5784,7 @@ def fetch_latest_model_info():
                 for release_info in release_info_list:
                     show_release_info(release_info)
                     already_shown_releases.append(release_info["tag_name_clean"])
-                
+
                 # remember shown releases
                 with open(release_shown_json, 'w') as f:
                     json.dump(already_shown_releases, f)
@@ -5847,14 +5795,14 @@ def fetch_latest_model_info():
         except Exception as e:
             print(f"Could not update model and version info: {e}")
 
-        # update root so that the new models show up in the dropdown menu, 
+        # update root so that the new models show up in the dropdown menu,
         # but also the correct species for the existing models
         update_model_dropdowns()
         print(f"model info updated in {round(time.time() - start_time, 2)} seconds")
 
 # open window with release info
 def show_release_info(release):
-    
+
     # define functions
     def close():
         rl_root.destroy()
@@ -5957,7 +5905,7 @@ def download_model(model_dir, skip_ask=False):
     total_download_size = model_vars["total_download_size"]
 
     # download
-    try:          
+    try:
         # check if the user wants to download
         if not skip_ask:
             if not mb.askyesno(["Download required", "Descarga necesaria"][lang_idx],
@@ -5989,7 +5937,7 @@ def download_model(model_dir, skip_ask=False):
             file_path = os.path.join(model_dir, fname)
             response = requests.get(download_url, stream=True, timeout=30, headers=headers)
             response.raise_for_status()
-            
+
             with open(file_path, 'wb') as file:
                 for chunk in response.iter_content(chunk_size=65536):
                     if chunk:
@@ -6007,7 +5955,7 @@ def download_model(model_dir, skip_ask=False):
         print("ERROR:\n" + str(error) + "\n\nDETAILS:\n" + str(traceback.format_exc()) + "\n\n")
         try:
             # remove incomplete download
-            if os.path.isfile(file_path): 
+            if os.path.isfile(file_path):
                 os.remove(file_path)
         except UnboundLocalError:
             # file_path is not set, meaning there is no incomplete download
@@ -6016,10 +5964,10 @@ def download_model(model_dir, skip_ask=False):
 
 # download envrionment
 def download_environment(env_name, model_vars, skip_ask=False):
-    
+
     # download
-    try:        
-        
+    try:
+
         env_dir = os.path.join(AddaxAI_files, "envs")
         # set environment variables
         if os.name == 'nt': # windows
@@ -6032,7 +5980,7 @@ def download_environment(env_name, model_vars, skip_ask=False):
             download_latest_url = f"https://addaxaipremiumstorage.blob.core.windows.net/github-zips/latest/macos/envs/env-{env_name}.tar.xz"
             filename = f"{env_name}.tar.xz"
         else: # linux
-            return False # linux install this during setup 
+            return False # linux install this during setup
 
         # set headers to trick host to thinking we are a browser
         headers = {
@@ -6081,7 +6029,7 @@ def download_environment(env_name, model_vars, skip_ask=False):
                     download_popup.update_download_progress(percentage_done)
         progress_bar.close()
         print(f"Download successful. File saved at: {file_path}")
-        
+
         # After download, begin extraction
         if filename.endswith(".tar.xz"):
             # Extract the .tar.xz file
@@ -6089,7 +6037,7 @@ def download_environment(env_name, model_vars, skip_ask=False):
                 # Get the total number of files to be extracted
                 total_files = len(tar.getnames())
                 extraction_progress_bar = tqdm(total=total_files, unit='file', desc="Extracting")
-                
+
                 # Extract each file and update the extraction progress
                 for member in tar:
                     tar.extract(member, path=env_dir)
@@ -6114,7 +6062,7 @@ def download_environment(env_name, model_vars, skip_ask=False):
                 # get the total number of files to be extracted
                 total_files = len(zip_ref.namelist())
                 extraction_progress_bar = tqdm(total=total_files, unit='file', desc="Extracting")
-                
+
                 # extract each file and update the extraction progress
                 for member in zip_ref.namelist():
                     zip_ref.extract(member, path=env_dir)
@@ -6124,7 +6072,7 @@ def download_environment(env_name, model_vars, skip_ask=False):
                 extraction_progress_bar.close()
             download_popup.close()
             print(f"Extraction successful. Files extracted to: {env_dir}")
-            
+
             # Remove the zip file after extraction
             try:
                 os.remove(file_path)
@@ -6140,17 +6088,17 @@ def download_environment(env_name, model_vars, skip_ask=False):
         print("ERROR:\n" + str(error) + "\n\nDETAILS:\n" + str(traceback.format_exc()) + "\n\n")
         try:
             # remove incomplete archive
-            if os.path.isfile(file_path): 
+            if os.path.isfile(file_path):
                 os.remove(file_path)
-                
+
             # remove incomplete extracted dir
             extracted_dir = os.path.join(env_dir, f"env-{env_name}")
-            if os.path.isdir(extracted_dir): 
+            if os.path.isdir(extracted_dir):
                 shutil.rmtree(extracted_dir)
 
             # close popup
             download_popup.close()
-                
+
         except UnboundLocalError:
             # file_path is not set, meaning there is no incomplete download
             pass
@@ -6165,16 +6113,16 @@ def download_environment(env_name, model_vars, skip_ask=False):
 
 # open window with model info
 def show_download_error_window(model_title, model_dir, model_vars):
-    
+
     # get dwonload info
     download_info = model_vars["download_info"]
     total_download_size = model_vars["total_download_size"]
-    
+
     # define functions
     def try_again():
         de_root.destroy()
         download_model(model_dir, skip_ask = True)
-    
+
     # create window
     de_root = customtkinter.CTkToplevel(root)
     de_root.title(["Download error", "Error de descarga"][lang_idx])
@@ -6223,7 +6171,7 @@ def show_download_error_window(model_title, model_dir, model_vars):
                            "bloquear la conexión a Internet. Inténtalo de nuevo con este software de protección "
                            "desactivado."][lang_idx])
 
-    # try internet connection again 
+    # try internet connection again
     btns_frm1 = customtkinter.CTkFrame(master=de_root)
     btns_frm1.columnconfigure(0, weight=1, minsize=10)
     btns_frm1.grid(row=4, column=0, padx=PADX, pady=(0, PADY), sticky="nswe")
@@ -6240,7 +6188,7 @@ def show_download_error_window(model_title, model_dir, model_vars):
     pro_lbl1 = customtkinter.CTkLabel(pro_frm_1, text=[" 3. Manual download", " 3. Descarga manual"][lang_idx], font = main_label_font)
     pro_lbl1.grid(row=0, column=0, padx=PADX, pady=(PADY, PADY/2), sticky="nsw")
     pro_lbl2 = customtkinter.CTkLabel(pro_frm_2, text=["If the above suggestions don't work, it might be easiest to manually"
-                                                       " download the file(s) and place them in the appropriate folder.", 
+                                                       " download the file(s) and place them in the appropriate folder.",
                                                        "Si las sugerencias anteriores no funcionan, puede que lo más fácil "
                                                        "sea descargar manualmente el archivo o archivos y colocarlos en "
                                                        "la carpeta adecuada."][lang_idx])
@@ -6334,7 +6282,7 @@ def show_download_error_window(model_title, model_dir, model_vars):
 
     if show_next_steps:
         # general steps
-        pro_lbl7 = customtkinter.CTkLabel(pro_frm_2, text=[f" {step_n}. Make sure you can view hidden files in your file explorer.", 
+        pro_lbl7 = customtkinter.CTkLabel(pro_frm_2, text=[f" {step_n}. Make sure you can view hidden files in your file explorer.",
                                                            f" {step_n}. Asegúrate de que puedes ver los archivos ocultos en tu explorador de archivos."][lang_idx]);step_n += 1
         pro_lbl7.grid(row=pro_lbl5_row + 1, column=0, padx=PADX, pady=(0, 0), sticky="nsw")
         pro_lbl8 = customtkinter.CTkLabel(pro_frm_2, text=[f" {step_n}. Move the downloaded file(s) into the folder:",
@@ -6355,7 +6303,7 @@ def show_download_error_window(model_title, model_dir, model_vars):
 
 # open window with env info
 def show_download_error_window_env(model_title, model_dir, model_vars):
-    
+
     # create window
     de_root = customtkinter.CTkToplevel(root)
     de_root.title(["Download error", "Error de descarga"][lang_idx])
@@ -6419,7 +6367,7 @@ def open_species_selection():
         write_model_vars(new_values = {"selected_classes": selected_classes})
         model_cls_animal_options(var_cls_model.get())
         ss_root.withdraw()
-    
+
     # on seleciton change
     def on_selection():
         selected_classes = scrollable_checkbox_frame.get_checked_items()
@@ -6434,7 +6382,7 @@ def open_species_selection():
     spp_frm_1.grid(row=0, column=0, padx=PADX, pady=PADY, sticky="nswe")
     spp_frm = customtkinter.CTkFrame(master=spp_frm_1, width=1000)
     spp_frm.grid(row=0, column=0, padx=PADX, pady=PADY, sticky="nswe")
-    lbl1 = customtkinter.CTkLabel(spp_frm, text=["Which species are present in your project area?", 
+    lbl1 = customtkinter.CTkLabel(spp_frm, text=["Which species are present in your project area?",
                                                  "¿Qué especies están presentes en la zona de su proyecto?"][lang_idx],
                                                  font = main_label_font)
     lbl1.grid(row=0, column=0, padx=2*PADX, pady=PADY, columnspan = 2, sticky="nsw")
@@ -6552,7 +6500,7 @@ class SpeciesSelectionFrame(customtkinter.CTkScrollableFrame):
 
     def get_checked_items(self):
         return [checkbox.cget("text") for checkbox in self.checkbox_list if checkbox.get() == 1]
-    
+
     def get_all_items(self):
         return [checkbox.cget("text") for checkbox in self.checkbox_list]
 
@@ -6568,19 +6516,19 @@ class EnvDownloadProgressWindow:
         self.frm = customtkinter.CTkFrame(master=self.dm_root)
         self.frm.grid(row=3, column=0, padx=PADX, pady=(PADY, PADY/2), sticky="nswe")
         self.frm.columnconfigure(0, weight=1, minsize=500 * scale_factor)
-        
+
         self.lbl = customtkinter.CTkLabel(self.dm_root, text=[f"Downloading environment '{env_title}' ({total_size_str})",
-                                                              f"Descargar entorno '{env_title}' ({total_size_str})"][lang_idx], 
+                                                              f"Descargar entorno '{env_title}' ({total_size_str})"][lang_idx],
                                           font = customtkinter.CTkFont(family='CTkFont', size=14, weight = 'bold'))
         self.lbl.grid(row=0, column=0, padx=PADX, pady=(0, 0), sticky="nsew")
-        
+
         self.war = customtkinter.CTkLabel(self.dm_root, text=["Please prevent computer from sleeping during the download.",
                                                               "Por favor, evite que el ordenador se duerma durante la descarga."][lang_idx])
         self.war.grid(row=1, column=0, padx=PADX, pady=0, sticky="nswe")
-        
+
         self.but = CancelButton(self.dm_root, text=["  Prevent sleep with online tool ", "  Usar prevención de sueño en línea  "][lang_idx], command=open_nosleep_page)
         self.but.grid(row=2, column=0, padx=PADX, pady=(PADY/2, 0), sticky="")
-        
+
         # Label for Downloading Progress
         self.lbl_download = customtkinter.CTkLabel(self.frm, text=["Downloading...", "Descargando..."][lang_idx])
         self.lbl_download.grid(row=1, column=0, padx=PADX, pady=(0, 0), sticky="nsew")
@@ -6642,7 +6590,7 @@ class ModelDownloadProgressWindow:
         self.frm.grid(row=3, column=0, padx=PADX, pady=(PADY, PADY/2), sticky="nswe")
         self.frm.columnconfigure(0, weight=1, minsize=500 * scale_factor)
         self.lbl = customtkinter.CTkLabel(self.dm_root, text=[f"Downloading model '{model_title}' ({total_size_str})",
-                                                              f"Descargar modelo '{model_title}' ({total_size_str})"][lang_idx], 
+                                                              f"Descargar modelo '{model_title}' ({total_size_str})"][lang_idx],
                                           font = customtkinter.CTkFont(family='CTkFont', size=14, weight = 'bold'))
         self.lbl.grid(row=0, column=0, padx=PADX, pady=(0, 0), sticky="nsew")
         self.war = customtkinter.CTkLabel(self.dm_root, text=["Please prevent computer from sleeping during the download.",
@@ -6704,11 +6652,11 @@ def check_donation_window_popup():
 
 # show donation window
 def show_donation_popup():
-    
+
     # define functions
     def open_link(url):
         webbrowser.open(url)
-    
+
     # define text variables
     donation_text = [
         "AddaxAI is free and open-source because we believe conservation technology should be available to everyone, regardless of budget. But keeping it that way takes time, effort, and resources—all contributed by volunteers. If you’re using AddaxAI, consider chipping in. Think of it as an honesty box: if every user contributed just $3 per month, we could sustain development, improve features, and keep expanding the model zoo.",
@@ -6773,7 +6721,7 @@ def show_donation_popup():
 
 # open window with model info
 def show_model_info(title = None, model_dict = None, new_model = False):
-    
+
     # fetch current selected model if title and model_dict are not supplied
     if title is None:
         title = var_cls_model.get()
@@ -6796,7 +6744,7 @@ def show_model_info(title = None, model_dict = None, new_model = False):
         update_var = f"Your current AddaxAI version (v{current_AA_version}) will not be able to run this model. An update is required."
     else:
         update_var = f"Current version of AddaxAI (v{current_AA_version}) is able to use this model. No update required."
-    
+
     # define functions
     def close():
         nm_root.destroy()
@@ -6951,7 +6899,7 @@ def update_model_dropdowns():
 
 # window for quick results info while running simple mode
 def show_result_info(file_path):
-    
+
     # define functions
     def close():
         rs_root.withdraw()
@@ -7032,7 +6980,7 @@ def show_result_info(file_path):
                       wraplength = 130)
     table_header.grid(row=0, column=0, padx=PADX, pady=(PADY/4, 0), columnspan = 2, sticky="nesw")
     table_values = CTkTable(master=table_scr_frm,
-                      column=3, 
+                      column=3,
                       values=table_rows,
                       color_phase = "horizontal",
                       wraplength = 130,
@@ -7067,25 +7015,25 @@ class TextButtonWindow:
         self.root.geometry("+10+10")
         bring_window_to_top_but_not_for_ever(self.root)
         self.root.protocol("WM_DELETE_WINDOW", self.user_close)
-        
+
         self.text_label = tk.Label(self.root, text=text)
         self.text_label.pack(padx=10, pady=10)
-        
+
         self.selected_button = None
         self.button_frame = tk.Frame(self.root)
         self.button_frame.pack(padx=10, pady=10)
-        
+
         for button_text in buttons:
             button = tk.Button(self.button_frame, text=button_text, command=lambda btn=button_text: self._button_click(btn))
             button.pack(side=tk.LEFT, padx=5)
-        
+
     def _button_click(self, button_text):
         self.selected_button = button_text
         self.root.quit()
-        
+
     def open(self):
         self.root.mainloop()
-        
+
     def user_close(self):
         self.selected_button = "EXIT"
         self.root.quit()
@@ -7178,7 +7126,7 @@ def toggle_hitl_ann_selection_frame(cmd = None):
 
 # enable or disable the options in the human-in-the-loop annotation selection frame
 def toggle_hitl_ann_selection(rad_ann_var, hitl_ann_selection_frame):
-    rad_ann_var = rad_ann_var.get()    
+    rad_ann_var = rad_ann_var.get()
     cols, rows = hitl_ann_selection_frame.grid_size()
     if rad_ann_var == 1:
         enable_ann_frame(1, hitl_ann_selection_frame)
@@ -7198,7 +7146,7 @@ def enable_amt_per_ent(row):
     ent_amt = selection_dict[row]['ent_amt']
     if rad_var == 1:
         ent_per.configure(state = DISABLED)
-        ent_amt.configure(state = DISABLED)      
+        ent_amt.configure(state = DISABLED)
     if rad_var == 2:
         ent_per.configure(state = NORMAL)
         ent_amt.configure(state = DISABLED)
@@ -7255,7 +7203,7 @@ class ProgressWindow:
         ttl_font = customtkinter.CTkFont(family='CTkFont', size=13, weight = 'bold')
         self.pady_progress_window = PADY/1.5
         self.padx_progress_window = PADX/1.5
-        
+
         # language settings
         in_queue_txt = ['In queue', 'En cola']
         checking_fpaths_txt = ['Checking file paths', 'Comprobación de rutas de archivos']
@@ -7310,7 +7258,7 @@ class ProgressWindow:
             self.img_det_ela_lbl.grid(row=3, padx=self.padx_progress_window, pady=0, sticky="nsw")
             self.img_det_ela_lbl.grid_remove()
             self.img_det_ela_val = customtkinter.CTkLabel(self.img_det_sub_frm, height = lbl_height, text=f"")
-            self.img_det_ela_val.grid(row=3, padx=self.padx_progress_window, pady=0, sticky="nse")     
+            self.img_det_ela_val.grid(row=3, padx=self.padx_progress_window, pady=0, sticky="nse")
             self.img_det_ela_val.grid_remove()
             self.img_det_rem_lbl = customtkinter.CTkLabel(self.img_det_sub_frm, height = lbl_height, text=f"{remaining_time_txt[lang_idx]}:")
             self.img_det_rem_lbl.grid(row=4, padx=self.padx_progress_window, pady=0, sticky="nsw")
@@ -7361,7 +7309,7 @@ class ProgressWindow:
             self.img_cls_ela_lbl.grid(row=3, padx=self.padx_progress_window, pady=0, sticky="nsw")
             self.img_cls_ela_lbl.grid_remove()
             self.img_cls_ela_val = customtkinter.CTkLabel(self.img_cls_sub_frm, height = lbl_height, text=f"")
-            self.img_cls_ela_val.grid(row=3, padx=self.padx_progress_window, pady=0, sticky="nse")     
+            self.img_cls_ela_val.grid(row=3, padx=self.padx_progress_window, pady=0, sticky="nse")
             self.img_cls_ela_val.grid_remove()
             self.img_cls_rem_lbl = customtkinter.CTkLabel(self.img_cls_sub_frm, height = lbl_height, text=f"{remaining_time_txt[lang_idx]}:")
             self.img_cls_rem_lbl.grid(row=4, padx=self.padx_progress_window, pady=0, sticky="nsw")
@@ -7412,7 +7360,7 @@ class ProgressWindow:
             self.vid_det_ela_lbl.grid(row=3, padx=self.padx_progress_window, pady=0, sticky="nsw")
             self.vid_det_ela_lbl.grid_remove()
             self.vid_det_ela_val = customtkinter.CTkLabel(self.vid_det_sub_frm, height = lbl_height, text=f"")
-            self.vid_det_ela_val.grid(row=3, padx=self.padx_progress_window, pady=0, sticky="nse")     
+            self.vid_det_ela_val.grid(row=3, padx=self.padx_progress_window, pady=0, sticky="nse")
             self.vid_det_ela_val.grid_remove()
             self.vid_det_rem_lbl = customtkinter.CTkLabel(self.vid_det_sub_frm, height = lbl_height, text=f"{remaining_time_txt[lang_idx]}:")
             self.vid_det_rem_lbl.grid(row=4, padx=self.padx_progress_window, pady=0, sticky="nsw")
@@ -7463,7 +7411,7 @@ class ProgressWindow:
             self.vid_cls_ela_lbl.grid(row=3, padx=self.padx_progress_window, pady=0, sticky="nsw")
             self.vid_cls_ela_lbl.grid_remove()
             self.vid_cls_ela_val = customtkinter.CTkLabel(self.vid_cls_sub_frm, height = lbl_height, text=f"")
-            self.vid_cls_ela_val.grid(row=3, padx=self.padx_progress_window, pady=0, sticky="nse")     
+            self.vid_cls_ela_val.grid(row=3, padx=self.padx_progress_window, pady=0, sticky="nse")
             self.vid_cls_ela_val.grid_remove()
             self.vid_cls_rem_lbl = customtkinter.CTkLabel(self.vid_cls_sub_frm, height = lbl_height, text=f"{remaining_time_txt[lang_idx]}:")
             self.vid_cls_rem_lbl.grid(row=4, padx=self.padx_progress_window, pady=0, sticky="nsw")
@@ -7508,13 +7456,13 @@ class ProgressWindow:
             self.img_pst_ela_lbl.grid(row=2, padx=self.padx_progress_window, pady=0, sticky="nsw")
             self.img_pst_ela_lbl.grid_remove()
             self.img_pst_ela_val = customtkinter.CTkLabel(self.img_pst_sub_frm, height = lbl_height, text=f"")
-            self.img_pst_ela_val.grid(row=2, padx=self.padx_progress_window, pady=0, sticky="nse")     
+            self.img_pst_ela_val.grid(row=2, padx=self.padx_progress_window, pady=0, sticky="nse")
             self.img_pst_ela_val.grid_remove()
             self.img_pst_rem_lbl = customtkinter.CTkLabel(self.img_pst_sub_frm, height = lbl_height, text=f"{remaining_time_txt[lang_idx]}:")
             self.img_pst_rem_lbl.grid(row=3, padx=self.padx_progress_window, pady=0, sticky="nsw")
             self.img_pst_rem_lbl.grid_remove()
             self.img_pst_rem_val = customtkinter.CTkLabel(self.img_pst_sub_frm, height = lbl_height, text=f"")
-            self.img_pst_rem_val.grid(row=3, padx=self.padx_progress_window, pady=0, sticky="nse")     
+            self.img_pst_rem_val.grid(row=3, padx=self.padx_progress_window, pady=0, sticky="nse")
             self.img_pst_rem_val.grid_remove()
             self.img_pst_can_btn = CancelButton(master = self.img_pst_sub_frm, text = "Cancel", command = lambda: print(""))
             self.img_pst_can_btn.grid(row=7, padx=self.padx_progress_window, pady=(self.pady_progress_window, 0), sticky="ns")
@@ -7541,13 +7489,13 @@ class ProgressWindow:
             self.vid_pst_ela_lbl.grid(row=2, padx=self.padx_progress_window, pady=0, sticky="nsw")
             self.vid_pst_ela_lbl.grid_remove()
             self.vid_pst_ela_val = customtkinter.CTkLabel(self.vid_pst_sub_frm, height = lbl_height, text=f"")
-            self.vid_pst_ela_val.grid(row=2, padx=self.padx_progress_window, pady=0, sticky="nse")     
+            self.vid_pst_ela_val.grid(row=2, padx=self.padx_progress_window, pady=0, sticky="nse")
             self.vid_pst_ela_val.grid_remove()
             self.vid_pst_rem_lbl = customtkinter.CTkLabel(self.vid_pst_sub_frm, height = lbl_height, text=f"{remaining_time_txt[lang_idx]}:")
             self.vid_pst_rem_lbl.grid(row=3, padx=self.padx_progress_window, pady=0, sticky="nsw")
             self.vid_pst_rem_lbl.grid_remove()
             self.vid_pst_rem_val = customtkinter.CTkLabel(self.vid_pst_sub_frm, height = lbl_height, text=f"")
-            self.vid_pst_rem_val.grid(row=3, padx=self.padx_progress_window, pady=0, sticky="nse")     
+            self.vid_pst_rem_val.grid(row=3, padx=self.padx_progress_window, pady=0, sticky="nse")
             self.vid_pst_rem_val.grid_remove()
             self.vid_pst_can_btn = CancelButton(master = self.vid_pst_sub_frm, text = "Cancel", command = lambda: print(""))
             self.vid_pst_can_btn.grid(row=7, padx=self.padx_progress_window, pady=(self.pady_progress_window, 0), sticky="ns")
@@ -7574,13 +7522,13 @@ class ProgressWindow:
             self.plt_ela_lbl.grid(row=2, padx=self.padx_progress_window, pady=0, sticky="nsw")
             self.plt_ela_lbl.grid_remove()
             self.plt_ela_val = customtkinter.CTkLabel(self.plt_sub_frm, height = lbl_height, text=f"")
-            self.plt_ela_val.grid(row=2, padx=self.padx_progress_window, pady=0, sticky="nse")     
+            self.plt_ela_val.grid(row=2, padx=self.padx_progress_window, pady=0, sticky="nse")
             self.plt_ela_val.grid_remove()
             self.plt_rem_lbl = customtkinter.CTkLabel(self.plt_sub_frm, height = lbl_height, text=f"{remaining_time_txt[lang_idx]}:")
             self.plt_rem_lbl.grid(row=3, padx=self.padx_progress_window, pady=0, sticky="nsw")
             self.plt_rem_lbl.grid_remove()
             self.plt_rem_val = customtkinter.CTkLabel(self.plt_sub_frm, height = lbl_height, text=f"")
-            self.plt_rem_val.grid(row=3, padx=self.padx_progress_window, pady=0, sticky="nse")     
+            self.plt_rem_val.grid(row=3, padx=self.padx_progress_window, pady=0, sticky="nse")
             self.plt_rem_val.grid_remove()
             self.plt_can_btn = CancelButton(master = self.plt_sub_frm, text = "Cancel", command = lambda: print(""))
             self.plt_can_btn.grid(row=7, padx=self.padx_progress_window, pady=(self.pady_progress_window, 0), sticky="ns")
@@ -7666,7 +7614,7 @@ class ProgressWindow:
                 self.img_det_spe_val.grid_remove()
                 self.img_det_pbr.grid_configure(pady=(self.pady_progress_window, 0))
                 self.img_det_per.grid_configure(pady=(self.pady_progress_window, 0))
-                
+
         # classification of images
         elif process == "img_cls":
             if status == "load":
@@ -8138,7 +8086,7 @@ def update_frame_states():
     vid_json = False
     if os.path.isfile(os.path.join(var_choose_folder.get(), "video_recognition_file.json")):
         vid_json = True
-    
+
     # check if dir is already processed
     if img_json or vid_json:
         complete_frame(snd_step)
@@ -8160,11 +8108,11 @@ def update_frame_states():
             complete_frame(trd_step)
     else:
         disable_frame(trd_step)
-    
+
     # if in timelapse mode, always disable trd and fth step
     if timelapse_mode:
         disable_frame(trd_step)
-        disable_frame(fth_step)    
+        disable_frame(fth_step)
 
 # check if user entered text in entry widget
 def no_user_input(var):
@@ -8175,7 +8123,7 @@ def no_user_input(var):
 
 # show warning if not valid input
 def invalid_value_warning(str, numeric = True):
-    string = [f"You either entered an invalid value for the {str}, or none at all.", f"Ingresó un valor no válido para {str} o ninguno."][lang_idx] 
+    string = [f"You either entered an invalid value for the {str}, or none at all.", f"Ingresó un valor no válido para {str} o ninguno."][lang_idx]
     if numeric:
         string += [" You can only enter numberic characters.", " Solo puede ingresar caracteres numéricos."][lang_idx]
     mb.showerror(invalid_value_txt[lang_idx], string)
@@ -8208,7 +8156,7 @@ def remove_widgets_based_on_location(master, rows, cols):
     for widget in widgets:
         widget.grid_forget()
 
-# create hyperlinks (thanks marvin from GitHub) 
+# create hyperlinks (thanks marvin from GitHub)
 class HyperlinkManager:
     def __init__(self, text):
         self.text = text
@@ -8242,7 +8190,7 @@ class HyperlinkManager:
 def cancel():
     # log
     print(f"EXECUTED: {sys._getframe().f_code.co_name}({locals()})\n")
-    
+
     global cancel_var
     cancel_var = True
 
@@ -8333,7 +8281,7 @@ def on_chb_smooth_cls_animal_change():
                                                " a las detecciones de vehículos o personas junto a animales."][lang_idx])
 
 # toggle classification subframe
-def toggle_cls_frame(): 
+def toggle_cls_frame():
     # log
     print(f"EXECUTED: {sys._getframe().f_code.co_name}({locals()})\n")
 
@@ -8383,7 +8331,7 @@ def complete_frame(frame):
     global check_mark_one_row
     global check_mark_two_rows
 
-    # check which frame 
+    # check which frame
     any_step = frame.cget('text').startswith(f' {step_txt[lang_idx]}')
     fst_step = frame.cget('text').startswith(f' {step_txt[lang_idx]} 1')
     snd_step = frame.cget('text').startswith(f' {step_txt[lang_idx]} 2')
@@ -8411,7 +8359,7 @@ def complete_frame(frame):
             btn_choose_folder.configure(text=f"{change_folder_txt[lang_idx]}?", state = NORMAL)
             btn_choose_folder.lift()
             dsp_choose_folder.lift()
-    
+
     else:
         # the rest
         if not any_step:
@@ -8434,7 +8382,7 @@ def enable_frame(frame):
     uncomplete_frame(frame)
     enable_widgets(frame)
 
-    # check which frame 
+    # check which frame
     any_step = frame.cget('text').startswith(f' {step_txt[lang_idx]}')
     fst_step = frame.cget('text').startswith(f' {step_txt[lang_idx]} 1')
     snd_step = frame.cget('text').startswith(f' {step_txt[lang_idx]} 2')
@@ -8502,7 +8450,7 @@ def disable_frame(frame):
         vis_frame.configure(fg='grey80')
         vis_frame.configure(relief = 'flat')
 
-    
+
 # check if checkpoint is present and set checkbox accordingly
 def disable_chb_cont_checkpnt():
     if var_cont_checkpnt.get():
@@ -8589,7 +8537,7 @@ def switch_mode():
     # switch
     if advanced_mode:
         advanc_mode_win.withdraw()
-        simple_mode_win.deiconify()         
+        simple_mode_win.deiconify()
     else:
         advanc_mode_win.deiconify()
         simple_mode_win.withdraw()
@@ -8640,7 +8588,7 @@ def reset_values():
     var_crp_files.set(False)
     var_exp.set(True)
     var_exp_format.set(dpd_options_exp_format[lang_idx][global_vars['var_exp_format_idx']])
-    
+
     write_global_vars({
         "var_det_model_idx": dpd_options_model[lang_idx].index(var_det_model.get()),
         "var_det_model_path": var_det_model_path.get(),
@@ -8785,7 +8733,7 @@ else: # macOS
     ADDAX_TXT_SIZE = 9
     GREY_BUTTON_BORDER_WIDTH = 0
 
-# TKINTER MAIN WINDOW 
+# TKINTER MAIN WINDOW
 root = customtkinter.CTk()
 AddaxAI_icon_image = tk.PhotoImage(file=os.path.join(AddaxAI_files, "AddaxAI", "imgs", "square_logo_excl_text.png"))
 root.iconphoto(True, AddaxAI_icon_image)
@@ -8798,7 +8746,7 @@ italic_label_font = customtkinter.CTkFont(family='CTkFont', size=14, slant='ital
 customtkinter.set_appearance_mode("light")
 customtkinter.set_default_color_theme(os.path.join(AddaxAI_files, "AddaxAI", "themes", "addaxai.json"))
 
-# ADVANCED MODE WINDOW 
+# ADVANCED MODE WINDOW
 advanc_mode_win = customtkinter.CTkToplevel(root)
 advanc_mode_win.title(f"AddaxAI v{current_AA_version} - Advanced mode")
 advanc_mode_win.geometry("+20+20")
@@ -9206,7 +9154,7 @@ trd_step.grid(column=1, row=trd_step_row, sticky='nesw')
 trd_step.columnconfigure(0, weight=1, minsize=label_width)
 trd_step.columnconfigure(1, weight=1, minsize=widget_width)
 
-# human-in-the-loop 
+# human-in-the-loop
 lbl_hitl_main_txt = ["Manually verify results", "Verificar manualmente los resultados"]
 row_hitl_main = 0
 lbl_hitl_main = Label(master=trd_step, text=lbl_hitl_main_txt[lang_idx], width=1, anchor="w")
@@ -9297,14 +9245,14 @@ vis_frame.columnconfigure(0, weight=1, minsize=label_width - subframe_correction
 vis_frame.columnconfigure(1, weight=1, minsize=widget_width - subframe_correction_factor)
 vis_frame.grid_forget()
 
-## draw bboxes 
-lbl_vis_bbox_txt = ["Draw bounding boxes and confidences", "Dibujar contornos y confianzas"] 
+## draw bboxes
+lbl_vis_bbox_txt = ["Draw bounding boxes and confidences", "Dibujar contornos y confianzas"]
 row_vis_bbox = 0
 lbl_vis_bbox = Label(vis_frame, text="     " + lbl_vis_bbox_txt[lang_idx], width=1, anchor="w")
 lbl_vis_bbox.grid(row=row_vis_bbox, sticky='nesw', pady=2)
 var_vis_bbox = BooleanVar()
 var_vis_bbox.set(global_vars['var_vis_bbox'])
-chb_vis_bbox = Checkbutton(vis_frame, variable=var_vis_bbox, anchor="w") 
+chb_vis_bbox = Checkbutton(vis_frame, variable=var_vis_bbox, anchor="w")
 chb_vis_bbox.grid(row=row_vis_bbox, column=1, sticky='nesw', padx=5)
 
 # line size
@@ -9327,7 +9275,7 @@ lbl_vis_blur = Label(vis_frame, text="     " + lbl_vis_blur_txt[lang_idx], width
 lbl_vis_blur.grid(row=row_vis_blur, sticky='nesw', pady=2)
 var_vis_blur = BooleanVar()
 var_vis_blur.set(global_vars['var_vis_blur'])
-chb_vis_blur = Checkbutton(vis_frame, variable=var_vis_blur, anchor="w") 
+chb_vis_blur = Checkbutton(vis_frame, variable=var_vis_blur, anchor="w")
 chb_vis_blur.grid(row=row_vis_blur, column=1, sticky='nesw', padx=5)
 
 ## crop images
@@ -9435,19 +9383,19 @@ bind_scroll_to_deploy_canvas()
 
 # help tab
 scroll = Scrollbar(help_tab)
-help_text = Text(help_tab, width=1, height=1, wrap=WORD, yscrollcommand=scroll.set) 
+help_text = Text(help_tab, width=1, height=1, wrap=WORD, yscrollcommand=scroll.set)
 help_text.configure(spacing1=2, spacing2=3, spacing3=2)
-help_text.tag_config('intro', font=f'{text_font} {int(13 * text_size_adjustment_factor)} italic', foreground='black', lmargin1=10, lmargin2=10, underline = False) 
-help_text.tag_config('tab', font=f'{text_font} {int(16 * text_size_adjustment_factor)} bold', foreground='black', lmargin1=10, lmargin2=10, underline = True) 
-help_text.tag_config('frame', font=f'{text_font} {int(15 * text_size_adjustment_factor)} bold', foreground=green_primary, lmargin1=15, lmargin2=15) 
-help_text.tag_config('feature', font=f'{text_font} {int(14 * text_size_adjustment_factor)} normal', foreground='black', lmargin1=20, lmargin2=20, underline = True) 
+help_text.tag_config('intro', font=f'{text_font} {int(13 * text_size_adjustment_factor)} italic', foreground='black', lmargin1=10, lmargin2=10, underline = False)
+help_text.tag_config('tab', font=f'{text_font} {int(16 * text_size_adjustment_factor)} bold', foreground='black', lmargin1=10, lmargin2=10, underline = True)
+help_text.tag_config('frame', font=f'{text_font} {int(15 * text_size_adjustment_factor)} bold', foreground=green_primary, lmargin1=15, lmargin2=15)
+help_text.tag_config('feature', font=f'{text_font} {int(14 * text_size_adjustment_factor)} normal', foreground='black', lmargin1=20, lmargin2=20, underline = True)
 help_text.tag_config('explanation', font=f'{text_font} {int(13 * text_size_adjustment_factor)} normal', lmargin1=25, lmargin2=25)
 hyperlink1 = HyperlinkManager(help_text)
 
 # function to write text which can be called when user changes language settings
 def write_help_tab():
     global help_text
-    line_number = 1 
+    line_number = 1
 
     # intro sentence
     help_text.insert(END, ["Below you can find detailed documentation for each setting. If you have any questions, feel free to contact me on ",
@@ -9495,7 +9443,7 @@ def write_help_tab():
     help_text.insert(END, ["AddaxAI uses a combination of a detection model and a classification model to identify animals. The detection model will locate the animal, whereas the "
                            "classification model will identify which species the animal belongs to. Here, you can select the classification model that you want to use. Each "
                            "classification model is developed for a specific area. Explore which model suits your data best, but please note that models developed for other biomes "
-                           "or projects do not necessarily perform equally well in other ecosystems. Always investigate the model’s accuracy on your data before accepting any results.", 
+                           "or projects do not necessarily perform equally well in other ecosystems. Always investigate the model’s accuracy on your data before accepting any results.",
                            "AddaxAI utiliza una combinación de un modelo de detección y un modelo de clasificación para identificar animales. El modelo de detección localizará al "
                            "animal, mientras que el modelo de clasificación identificará a qué especie pertenece el animal. Aquí puede seleccionar el modelo de clasificación que desea "
                            "utilizar. Cada modelo de clasificación se desarrolla para un área específica. Explore qué modelo se adapta mejor a sus datos, pero tenga en cuenta que los "
@@ -9783,7 +9731,7 @@ write_help_tab()
 about_scroll = Scrollbar(about_tab)
 about_text = Text(about_tab, width=1, height=1, wrap=WORD, yscrollcommand=scroll.set)
 about_text.configure(spacing1=2, spacing2=3, spacing3=2)
-about_text.tag_config('title', font=f'{text_font} {int(15 * text_size_adjustment_factor)} bold', foreground=green_primary, lmargin1=10, lmargin2=10) 
+about_text.tag_config('title', font=f'{text_font} {int(15 * text_size_adjustment_factor)} bold', foreground=green_primary, lmargin1=10, lmargin2=10)
 about_text.tag_config('info', font=f'{text_font} {int(13 * text_size_adjustment_factor)} normal', lmargin1=20, lmargin2=20)
 about_text.tag_config('citation', font=f'{text_font} {int(13 * text_size_adjustment_factor)} normal', lmargin1=30, lmargin2=50)
 hyperlink = HyperlinkManager(about_text)
@@ -9837,7 +9785,7 @@ def write_about_tab():
     scroll.configure(command=about_text.yview)
 write_about_tab()
 
-# SIMPLE MODE WINDOW 
+# SIMPLE MODE WINDOW
 dir_image = customtkinter.CTkImage(PIL_dir_image, size=(ICON_SIZE, ICON_SIZE))
 mdl_image = customtkinter.CTkImage(PIL_mdl_image, size=(ICON_SIZE, ICON_SIZE))
 spp_image = customtkinter.CTkImage(PIL_spp_image, size=(ICON_SIZE, ICON_SIZE))
@@ -10003,7 +9951,7 @@ def main():
 
     # run
     root.mainloop()
-    
+
 # executable as script
 if __name__ == "__main__":
     main()
