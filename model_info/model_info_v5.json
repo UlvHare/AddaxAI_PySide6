@@ -22,7 +22,7 @@
             "var_cls_detec_thresh_default": "0.2",
             "var_cls_class_thresh_default": "0.01",
             "var_smooth_cls_animal": false,
-            "min_version": "6.08"
+            "min_version": "6.09"
         },
         "Europe - DeepFaune v1.3": {
             "model_fname": "deepfaune-vit_large_patch14_dinov2.lvd142m.v3.pt",
