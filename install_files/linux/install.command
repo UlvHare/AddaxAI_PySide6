@@ -230,6 +230,14 @@ $conda_exe run -p "${LOCATION_ADDAXAI_FILES}/envs/env-pywildlife" pip install js
 $conda_exe clean --all --yes --force-pkgs-dirs
 $conda_exe clean --all --yes
 
+### install env-speciesnet
+$conda_exe create -p "${LOCATION_ADDAXAI_FILES}/envs/env-speciesnet" python=3.8 -y
+$conda_exe run -p "${LOCATION_ADDAXAI_FILES}/envs/env-speciesnet" pip install speciesnet
+
+### clean
+$conda_exe clean --all --yes --force-pkgs-dirs
+$conda_exe clean --all --yes
+
 # timestamp the end of installation
 END_DATE=`date`
 echo "This installation ended at: $END_DATE"
