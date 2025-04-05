@@ -1,5 +1,29 @@
 {
-    "cls": { 
+    "cls": {
+        "Global - SpeciesNet - Google": {
+            "model_fname": "Global - SpeciesNet - Google",
+            "description": "SpeciesNet is an image classifier designed to accelerate the review of images from motion-triggered wildlife cameras ('camera traps'). This classifier was trained at Google using a large dataset of camera trap images and an EfficientNet V2 M architecture (https://arxiv.org/abs/2104.00574). It is designed to classify images into one of more than 2000 labels, covering diverse animal species, higher-level taxa (like 'mammalia' or 'felidae'), and non-animal classes ('blank', 'vehicle'). The SpeciesNet classifier is typically run in an ensemble with MegaDetector (https://github.com/agentmorris/MegaDetector), an object detector that identifies the locations and types of objects present in camera trap images, categorizing them as animals, humans, or vehicles. The SpeciesNet ensemble combines these two models using a set of heuristics and, optionally, geofencing rules and taxonomic aggregation that take into account the geographical origin of the image to improve the reliability of its species classification. This ensemble is used for image classification in the Wildlife Insights platform (https://www.wildlifeinsights.org/).",
+            "developer": "Google",
+            "env": "speciesnet", 
+            "type": "",
+            "download_info": [],
+            "citation": "https://doi.org/10.1049/cvi2.12318",
+            "license": "https://github.com/google/cameratrapai/blob/main/LICENSE",
+            "total_download_size": "",
+            "info_url": "https://github.com/google/cameratrapai/?tab=readme-ov-file#speciesnet",
+            "all_classes": [
+                "SpeciesNet is trained on over 2000 categories; a full list of categories is available in the model card: https://github.com/google/cameratrapai/blob/main/model_cards/v4.0.0a.md"
+            ],
+            "selected_classes": [
+                "SpeciesNet is trained on over 2000 categories; a full list of categories is available in the model card: https://github.com/google/cameratrapai/blob/main/model_cards/v4.0.0a.md"
+            ],
+            "var_cls_detec_thresh": "0.20",
+            "var_cls_class_thresh": "0.01",
+            "var_cls_detec_thresh_default": "0.2",
+            "var_cls_class_thresh_default": "0.01",
+            "var_smooth_cls_animal": false,
+            "min_version": "6.08"
+        },
         "Europe - DeepFaune v1.3": {
             "model_fname": "deepfaune-vit_large_patch14_dinov2.lvd142m.v3.pt",
             "description": "The Deepfaune initiative aims at developing 'artificial intelligence' models to automatically classify species in images and videos collected using camera-traps. The initiative is led by a core academic team from the French 'Centre National de la Recherche Scientifique' (CNRS), in collaboration with more than 50 European partners involved in wildlife research, conservation and management. The Deepfaune models can be run through a custom software freely available on the website, or through other software packages or platforms like EcoAssist. New versions of the model are published regularly, increasing classification accuracy or adding new species to the list of species that can be recognized. More information is available at: https://www.deepfaune.cnrs.fr",
