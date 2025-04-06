@@ -3,7 +3,7 @@
 # GUI to simplify camera trap image analysis with species recognition models
 # https://addaxdatascience.com/addaxai/
 # Created by Peter van Lunteren
-# Latest edit by Peter van Lunteren on 2 Apr 2025
+# Latest edit by Peter van Lunteren on 6 Apr 2025
 
 # TODO: DEPTH - add depth estimation model: https://pytorch.org/hub/intelisl_midas_v2/
 # TODO: CLEAN - if the processing is done, and a image is deleted before the post processing, it crashes and just stops, i think it should just skip the file and then do the rest. I had to manually delete certain entries from the image_recognition_file.json to make it work
@@ -3399,8 +3399,8 @@ def start_deploy(simple_mode = False):
         # if videos present, tell users that Species net cannot process them
         if vid_present:
             mb.showerror(["SpeciesNet not available", "SpeciesNet no disponible"][lang_idx],
-                            message=[f"SpeciesNet cannot process videos. Please select images only.",
-                                        f"SpeciesNet no puede procesar vídeos. Seleccione sólo imágenes."][lang_idx])
+                            message=[f"Video support for SpeciesNet will be available in a future AddaxAI release, please uncheck 'process videos'.",
+                                        f"El soporte de video para SpeciesNet estará disponible en una futura versión de AddaxAI, por favor desmarque 'procesar videos'."][lang_idx])
             # reset
             btn_start_deploy.configure(state=NORMAL)
             sim_run_btn.configure(state=NORMAL)
@@ -5464,6 +5464,12 @@ def model_cls_animal_options(self):
         lbl_sppnet_location.grid_remove()
         dpd_sppnet_location.grid_remove()
 
+        # make sure detection model selection is shown
+        lbl_model.grid(row=row_model, sticky='nesw', pady=2)
+        dpd_model.grid(row=row_model, column=1, sticky='nesw', padx=5)
+        if var_det_model_short.get() != "":
+            dsp_model.grid(column=0, row=row_model, sticky='e')
+
         # show widgets for other classifiers
         lbl_choose_classes.grid(row=row_choose_classes, sticky='nesw', pady=2)
         btn_choose_classes.grid(row=row_choose_classes, column=1, sticky='nesw', padx=5)
@@ -5489,6 +5495,14 @@ def model_cls_animal_options(self):
         sim_spp_scr.grid(row=1, column=0, padx=PADX, pady=(PADY/4, PADY), sticky="ew", columnspan = 2)
 
     elif self == "Global - SpeciesNet - Google": # special procedure for speciesnet
+        
+        # remove detection model selection
+        lbl_model.grid_remove()
+        print(f"Removing detection model selection...")
+        dpd_model.grid_remove()
+        print(f"Removing detection model selection...")
+        dsp_model.grid_remove()
+        
         
         # remove widgets for other classifiers
         lbl_choose_classes.grid_remove()
@@ -7977,6 +7991,11 @@ def update_dpd_options(dpd, master, var, options, cmd, row, lbl, from_lang_idx):
     dpd.configure(width=1)
     dpd.grid(row=row, column=1, sticky='nesw', padx=5)
 
+    # remove detection dropdown for speciesnet
+    if (var_cls_model.get() == "Global - SpeciesNet - Google") and \
+         ("detec" in lbl['text']):
+        dpd.grid_remove()
+
     # give it same state as its label
     dpd.configure(state = str(lbl['state']))
 
@@ -8937,7 +8956,7 @@ cls_models = fetch_known_models(CLS_DIR)
 dpd_options_cls_model = [["None"] + cls_models, ["Ninguno"] + cls_models]
 
 # use classifier
-lbl_cls_model_txt = ["Model to further identify animals", "Modelo para identificar mejor a los animales"]
+lbl_cls_model_txt = ["Model to identify animals", "Modelo para identificar mejor a los animales"]
 row_cls_model = 1
 lbl_cls_model = Label(snd_step, text=lbl_cls_model_txt[lang_idx], width=1, anchor="w")
 lbl_cls_model.grid(row=row_cls_model, sticky='nesw', pady=2)
