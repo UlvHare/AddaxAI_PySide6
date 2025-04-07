@@ -3421,18 +3421,34 @@ def start_deploy(simple_mode = False):
         sppnet_output_window.add_string("SpeciesNet is starting up...\n\n")
 
         # deploy speciesnet
-        return_value = deploy_speciesnet(chosen_folder, sppnet_output_window)
+        try:
+            return_value = deploy_speciesnet(chosen_folder, sppnet_output_window)
         
-        # due to a package conflict on macos there might need to be a restart
-        if return_value == "restart":
-            sppnet_output_window.add_string("\n\nRestarting SpeciesNet...\n\n")
-            deploy_speciesnet(chosen_folder, sppnet_output_window)
+            # due to a package conflict on macos there might need to be a restart
+            if return_value == "restart":
+                sppnet_output_window.add_string("\n\nRestarting SpeciesNet...\n\n")
+                deploy_speciesnet(chosen_folder, sppnet_output_window)
+                
+            # enable stuff
+            btn_start_deploy.configure(state=NORMAL)
+            sim_run_btn.configure(state=NORMAL)
+            sppnet_output_window.close()
+            return
+    
+        except Exception as error:
+            # log error
+            print("\n\nERROR:\n" + str(error) + "\n\nTRACEBACK:\n" + traceback.format_exc() + "\n\n")
             
-        # enable button
-        btn_start_deploy.configure(state=NORMAL)
-        sim_run_btn.configure(state=NORMAL)
-        sppnet_output_window.close()
-        return
+            # show error
+            mb.showerror(title=error_txt[lang_idx],
+                        message=["An error has occurred", "Ha ocurrido un error"][lang_idx] + " (AddaxAI v" + current_AA_version + "): '" + str(error) + "'.",
+                        detail= traceback.format_exc())
+            
+            # enable stuff
+            btn_start_deploy.configure(state=NORMAL)
+            sim_run_btn.configure(state=NORMAL)
+            sppnet_output_window.close()
+            return
 
     # note if user is video analysing without smoothing
     global warn_smooth_vid
@@ -5039,7 +5055,7 @@ def deploy_speciesnet(chosen_folder, sppnet_output_window, simple_mode = False):
 
             # loop and adjust
             for image in data['images']:
-                if 'detections' in image:
+                if 'detections' in image and image['detections'] is not None:
                     for detection in image['detections']:
                         category_id = detection['category']
                         category_conf = detection['conf']
