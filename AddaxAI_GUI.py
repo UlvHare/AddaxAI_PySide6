@@ -5511,7 +5511,13 @@ def model_cls_animal_options(self):
         sim_spp_scr.grid(row=1, column=0, padx=PADX, pady=(PADY/4, PADY), sticky="ew", columnspan = 2)
 
     elif self == "Global - SpeciesNet - Google": # special procedure for speciesnet
-        
+
+        model_vars = load_model_vars()
+        dsp_choose_classes.configure(text = f"{len(model_vars['selected_classes'])} of {len(model_vars['all_classes'])}")
+        var_cls_detec_thresh.set(model_vars["var_cls_detec_thresh"])
+        var_cls_class_thresh.set(model_vars["var_cls_class_thresh"])
+        var_smooth_cls_animal.set(model_vars["var_smooth_cls_animal"])
+
         # remove detection model selection
         lbl_model.grid_remove()
         print(f"Removing detection model selection...")
@@ -9024,6 +9030,7 @@ row_cls_detec_thresh = 2
 lbl_cls_detec_thresh = Label(cls_frame, text="     " + lbl_cls_detec_thresh_txt[lang_idx], width=1, anchor="w")
 lbl_cls_detec_thresh.grid(row=row_cls_detec_thresh, sticky='nesw', pady=2)
 var_cls_detec_thresh = DoubleVar()
+
 var_cls_detec_thresh.set(model_vars.get('var_cls_detec_thresh', 0.6))
 scl_cls_detec_thresh = Scale(cls_frame, from_=0.01, to=1, resolution=0.01, orient=HORIZONTAL,
                              variable=var_cls_detec_thresh, showvalue=0, width=10, length=1, state=DISABLED,
