@@ -71,7 +71,12 @@ mkdir -p "${LOCATION_ADDAXAI_FILES}/yolov5_versions/yolov5_new"
 echo "Hello world!" >> "${LOCATION_ADDAXAI_FILES}/first-startup.txt"
 
 ## clone repositories
-git clone --depth 1 https://github.com/PetervanLunteren/AddaxAI.git "${LOCATION_ADDAXAI_FILES}/AddaxAI"
+git clone https://github.com/PetervanLunteren/AddaxAI.git "${LOCATION_ADDAXAI_FILES}/AddaxAI"
+
+cd "${LOCATION_ADDAXAI_FILES}/AddaxAI"
+git checkout 1625564f9670cb8487be422fa98864c26758557f
+cd ..
+
 rm -rf "${LOCATION_ADDAXAI_FILES}/AddaxAI/.git"
 FILE="$LOCATION_ADDAXAI_FILES/AddaxAI/Linux_open_AddaxAI_shortcut.desktop" # create shortcut file
 echo "[Desktop Entry]" > $FILE
