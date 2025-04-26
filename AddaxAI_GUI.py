@@ -923,6 +923,7 @@ dtypes = {
 
 # create dict with country codes for speciesnet
 countries = [
+    "NONE   \tDon't filter by regional taxa and allow all species to be present in the results",
     "ABW    \tAruba",
     "AFG    \tAfghanistan",
     "AGO    \tAngola",
@@ -1222,6 +1223,7 @@ countries = [
     "ZMB    \tZambia",
     "ZWE    \tZimbabwe"
 ]
+
 # for simplicity, the same list is used for both english as spanish I'll fix everything properly in the new version
 dpd_options_sppnet_location = [countries, countries]
 
@@ -4885,10 +4887,11 @@ def deploy_speciesnet(chosen_folder, sppnet_output_window, simple_mode = False):
     # get location information
     location_args = []
     country_code = var_sppnet_location.get()[:3]
-    location_args.append(f"--country={country_code}")
-    if country_code == "USA":
-        state_code = var_sppnet_location.get()[4:6]
-        location_args.append(f"--admin1_region={state_code}")
+    if country_code != "NON": # only add location args if not selected 'NONE' option
+        location_args.append(f"--country={country_code}")
+        if country_code == "USA":
+            state_code = var_sppnet_location.get()[4:6]
+            location_args.append(f"--admin1_region={state_code}")
     write_global_vars({
         "var_sppnet_location_idx": dpd_options_sppnet_location[lang_idx].index(var_sppnet_location.get())
     })

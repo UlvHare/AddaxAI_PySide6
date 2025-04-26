@@ -1,6 +1,6 @@
 # library of inference functions to be used for classifying MD crops 
 # Created by Peter van Lunteren
-# Latest edit by Peter van Lunteren on 28 Nov 2024
+# Latest edit by Peter van Lunteren on 10 April 2025
 
 # import packages
 import io
@@ -83,6 +83,104 @@ def remove_forbidden_classes(name_classifications, forbidden_classes):
     name_classifications = [[name, score / total_confidence] if score > 0 else [name, 0] for name, score in name_classifications]
     return name_classifications
 
+# DEBUG start TRIAL FOR A HIERARCHICAL FALLBACK CLASSIFICATION (10 April 2025)
+# This is some work in progress for a hierarchical fallback classification, where if confidence at the species level is too low (below a certain threshold), you back off to genus, then family, order, etc., until one rank gives you enough confidence to make a prediction.
+
+# # it needs a CSV in this format:
+# Kingdom,Phylum,Class,Order,Family,Genus,Species,Common Name
+# Kingdom:Animalia,Phylum:Chordata,Class:Aves,Order:Struthioniformes,Family:Struthionidae,Genus:Struthio,Struthio camelus,Ostrich
+# Kingdom:Animalia,Phylum:Chordata,Class:Aves,Class:Aves,Class:Aves,Class:Aves,Class:Aves,Bird
+# Kingdom:Animalia,Phylum:Chordata,Class:Mammalia,Order:Artiodactyla,Family:Bovidae,Genus:Antidorcas,Antidorcas marsupialis,Springbok
+# Kingdom:Animalia,Phylum:Chordata,Class:Mammalia,Order:Artiodactyla,Family:Bovidae,Genus:Bos,Bos taurus,Cattle
+# Kingdom:Animalia,Phylum:Chordata,Class:Mammalia,Order:Artiodactyla,Family:Bovidae,Genus:Oreotragus,Oreotragus oreotragus,Klipspringer
+# Kingdom:Animalia,Phylum:Chordata,Class:Mammalia,Order:Artiodactyla,Family:Bovidae,Genus:Oryx,Oryx gazella,Gemsbok
+# Kingdom:Animalia,Phylum:Chordata,Class:Mammalia,Order:Artiodactyla,Family:Bovidae,Genus:Raphicerus,Raphicerus campestris,Steenbok
+# Kingdom:Animalia,Phylum:Chordata,Class:Mammalia,Order:Artiodactyla,Family:Bovidae,Genus:Tragelaphus,Genus:Tragelaphus,Kudu
+# Kingdom:Animalia,Phylum:Chordata,Class:Mammalia,Order:Artiodactyla,Family:Giraffidae,Genus:Giraffa,Genus:Giraffa,Giraffe
+# Kingdom:Animalia,Phylum:Chordata,Class:Mammalia,Order:Carnivora,Family:Canidae,Genus:Canis,Genus:Canis,Jackal
+# Kingdom:Animalia,Phylum:Chordata,Class:Mammalia,Order:Carnivora,Family:Canidae,Genus:Vulpes,Genus:Vulpes,Fox
+# Kingdom:Animalia,Phylum:Chordata,Class:Mammalia,Order:Carnivora,Family:Felidae,Genus:Acinonyx,Acinonyx jubatus,Cheetah
+# Kingdom:Animalia,Phylum:Chordata,Class:Mammalia,Order:Carnivora,Family:Felidae,Genus:Caracal,Caracal caracal,Caracal
+# Kingdom:Animalia,Phylum:Chordata,Class:Mammalia,Order:Carnivora,Family:Felidae,Genus:Felis,Felis lybica,African Wild Cat
+# Kingdom:Animalia,Phylum:Chordata,Class:Mammalia,Order:Carnivora,Family:Felidae,Genus:Panthera,Panthera leo,Lion
+# Kingdom:Animalia,Phylum:Chordata,Class:Mammalia,Order:Carnivora,Family:Felidae,Genus:Panthera,Panthera pardus,Leopard
+# Kingdom:Animalia,Phylum:Chordata,Class:Mammalia,Order:Carnivora,Family:Herpestidae,Genus:Herpestes,Genus:Herpestes,Mongoose
+# Kingdom:Animalia,Phylum:Chordata,Class:Mammalia,Order:Carnivora,Family:Hyaenidae,Genus:Crocuta,Crocuta crocuta,Spotted Hyaena
+# Kingdom:Animalia,Phylum:Chordata,Class:Mammalia,Order:Carnivora,Family:Hyaenidae,Genus:Hyaena,Hyaena brunnea,Brown Hyaena
+# Kingdom:Animalia,Phylum:Chordata,Class:Mammalia,Order:Carnivora,Family:Hyaenidae,Genus:Proteles,Proteles cristata,Aardwolf
+# Kingdom:Animalia,Phylum:Chordata,Class:Mammalia,Order:Carnivora,Family:Mustelidae,Genus:Mellivora,Mellivora capensis,Honey Badger
+# Kingdom:Animalia,Phylum:Chordata,Class:Mammalia,Order:Carnivora,Family:Viverridae,Genus:Genetta,Genus:Genetta,Genet
+# Kingdom:Animalia,Phylum:Chordata,Class:Mammalia,Order:Hyracoidea,Family:Procaviidae,Genus:Procavia,Genus:Procavia,Hyrax
+# Kingdom:Animalia,Phylum:Chordata,Class:Mammalia,Order:Lagomorpha,Family:Leporidae,Genus:Lepus,Genus:Lepus,Hare
+# Kingdom:Animalia,Phylum:Chordata,Class:Mammalia,Order:Perissodactyla,Family:Equidae,Genus:Equus,Equus africanus asinus,Donkey
+# Kingdom:Animalia,Phylum:Chordata,Class:Mammalia,Order:Perissodactyla,Family:Equidae,Genus:Equus,Genus:Equus,Zebra
+# Kingdom:Animalia,Phylum:Chordata,Class:Mammalia,Order:Perissodactyla,Family:Rhinocerotidae,Family:Rhinocerotidae,Family:Rhinocerotidae,Rhinoceros
+# Kingdom:Animalia,Phylum:Chordata,Class:Mammalia,Order:Primates,Family:Cercopithecidae,Genus:Papio,Genus:Papio,Baboon
+# Kingdom:Animalia,Phylum:Chordata,Class:Mammalia,Order:Proboscidea,Family:Elephantidae,Genus:Loxodonta,Genus:Loxodonta,Elephant
+# Kingdom:Animalia,Phylum:Chordata,Class:Mammalia,Order:Rodentia,Family:Hystricidae,Genus:Hystrix,Genus:Hystrix,Porcupine
+
+# it still needs some tweaking, but the user can specify to return the best proediction at a specified level (species, family, etc), or set a threshold and return the first one that exceeds that threshold
+
+# import pandas as pd
+# from collections import defaultdict
+
+# taxonomy_df = pd.read_csv("/Applications/AddaxAI_files/models/cls/Namibian Desert - Addax Data Science/class_taxons.csv")
+
+# def hierarchical_prediction(name_classifications, taxonomy, threshold=0.6, mode="auto", level=None):
+#     """
+#     Args:
+#         name_classifications (list): List of [common_name, confidence] pairs.
+#         taxonomy (str or pd.DataFrame): Path to taxonomy CSV or a preloaded DataFrame.
+#         threshold (float): Confidence threshold to consider a prediction valid.
+#         mode (str): 'auto' for fallback logic, 'manual' to select a fixed level.
+#         level (str): Required if mode='manual'. One of 'Species', 'Genus', 'Family', 'Order', 'Class'.
+#     Returns:
+#         dict: Selected rank, label, and confidence.
+#     """
+    
+#     # Load taxonomy if it's a filepath
+#     if isinstance(taxonomy, str):
+#         taxonomy_df = pd.read_csv(taxonomy)
+#     else:
+#         taxonomy_df = taxonomy.copy()
+    
+#     taxonomy_df["Common Name"] = taxonomy_df["Common Name"].str.lower()
+    
+#     ranks = ["Species", "Genus", "Family", "Order", "Class"]
+#     rank_maps = {rank: defaultdict(float) for rank in ranks}
+
+#     for name, confidence in name_classifications:
+#         name = name.lower()
+#         match = taxonomy_df[taxonomy_df["Common Name"] == name]
+#         if not match.empty:
+#             for rank in ranks:
+#                 taxon = match.iloc[0][rank]
+#                 if pd.notna(taxon) and taxon != "":
+#                     rank_maps[rank][taxon] += confidence
+
+#     if mode == "auto":
+#         for rank in ranks:
+#             ranked = rank_maps[rank]
+#             if ranked:
+#                 top_label, top_conf = max(ranked.items(), key=lambda x: x[1])
+#                 if top_conf >= threshold:
+#                     return {"rank": rank, "label": top_label, "confidence": top_conf}
+#         return {"rank": None, "label": None, "confidence": 0.0}
+
+#     elif mode == "manual":
+#         if level not in ranks:
+#             raise ValueError(f"Invalid level '{level}'. Choose from {ranks}.")
+#         ranked = rank_maps[level]
+#         if ranked:
+#             top_label, top_conf = max(ranked.items(), key=lambda x: x[1])
+#             return {"rank": level, "label": top_label, "confidence": top_conf}
+#         else:
+#             return {"rank": level, "label": None, "confidence": 0.0}
+
+#     else:
+#         raise ValueError("Mode must be either 'auto' or 'manual'.")
+# # DEBUG end
+
 # run through json and convert detections to classficiations
 def convert_detections_to_classification(json_path,
                                          img_dir,
@@ -140,6 +238,14 @@ def convert_detections_to_classification(json_path,
                             crop = crop_function(Image.open(img_fpath), bbox)
                             name_classifications = inference_function(crop)
                             name_classifications = remove_forbidden_classes(name_classifications, forbidden_classes)
+                            
+                            # # DEBUG start TRIAL FOR A HIERARCHICAL FALLBACK CLASSIFICATION (10 April 2025)
+                            # print("\n FILE: ", fname)
+                            # print("hierarchical_prediction")
+                            # print(hierarchical_prediction(name_classifications, taxonomy_df, mode="manual", level="Species"))
+                            # print("\n HIERARCHICAL PREDICTION AUTO")
+                            # print(hierarchical_prediction(name_classifications, taxonomy_df, threshold=0.4, mode="auto"))
+                            # # DEBUG end
                             
                             # check if name already in classification_categories
                             idx_classifications = []
